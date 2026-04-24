@@ -1,0 +1,16 @@
+{
+  "labels": {
+    "e8d48ce5": "Complete the Vazir bootstrap context drafting using the currently selected Pi mo",
+    "8bd72900": "The user wants to plan their project.\nNo story files are pre-seeded in .context/",
+    "b149e3a1": "MVP/V1 for now",
+    "4fbb5dd6": "reading pdf smoothly and capturing highlight→note quickly thats the main app",
+    "ddaac2f2": "nope this is all brand new from scratch",
+    "84da4956": "please read through the prd carefully most of this is answere in there and then ",
+    "ff02fe9e": "there is a mvp and post-mvp section in the prd laid out just follow that",
+    "fbe47a15": "desktop/laptop forst. we will tackle mobile later",
+    "5e3ce6cd": "lets do leave the thumbnails off for now",
+    "d66135b8": "lets do pdf first and then epub but epub is part of the mvp",
+    "69a5b215": "yes",
+    "e8f5f053": "it looks good but please update the stories to match the vazir template exactly"
+  }
+}
