@@ -25,6 +25,9 @@ jobs:
       - name: Verify frontend shell
         run: curl --fail --silent --show-error http://localhost:3000 >/dev/null
 
+      - name: Run backend schema smoke test
+        run: docker compose exec -T backend python -m unittest tests.test_schema_smoke
+
       - name: Tear down
         if: always()
         run: docker compose down -v

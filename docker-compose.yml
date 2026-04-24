@@ -18,6 +18,17 @@ services:
       timeout: 5s
       retries: 5
 
+  db-bootstrap:
+    build:
+      context: ./backend
+    restart: "no"
+    environment:
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:?set DB_PASSWORD in .env}@postgres/${POSTGRES_DB:-maktaba}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "app.db", "bootstrap"]
+
   backend:
     build:
       context: ./backend
@@ -31,8 +42,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [

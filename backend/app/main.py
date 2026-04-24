@@ -8,6 +8,8 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.db import initialize_database
+
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data")).resolve()
 CORS_ORIGINS = [
     origin.strip()
@@ -27,6 +29,7 @@ def ensure_data_directories() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     ensure_data_directories()
+    initialize_database()
     yield
 
 

@@ -26,6 +26,14 @@
     "428d79aa": "whats the manifest?",
     "1a60674b": "a for now",
     "dcb7ffbd": "Most of your backend packages are at (or within one patch of) the latest release",
-    "6d75ad4c": "proceed witht the upgrade. this is the best time to do it while we are scaffoldi"
+    "6d75ad4c": "proceed witht the upgrade. this is the best time to do it while we are scaffoldi",
+    "c615528c": "yes please test everything",
+    "33fa565f": "impliment story 2",
+    "1db63416": "can you start it so i can take a look at it?",
+    "1338c684": "yes please",
+    "421ddc64": "yes please",
+    "543e6b7c": "why are you showinf me the options to view story etc. from the vazir extensions?",
+    "0fb4b368": "no i mean after the /complete-story command its supposed to prompt some options.",
+    "a9bf54be": "can you look at the other reviews that havent been completed and impliment those"
   }
 }

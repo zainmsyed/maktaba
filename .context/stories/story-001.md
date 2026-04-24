@@ -1,9 +1,9 @@
 # Story 001: Bootstrap project scaffold and Docker runtime
 
-**Status:** in-progress  
+**Status:** complete  
 **Created:** 2026-04-24  
 **Last accessed:** 2026-04-24  
-**Completed:** —
+**Completed:** 2026-04-24
 
 ---
 

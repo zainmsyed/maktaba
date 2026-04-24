@@ -29,6 +29,7 @@ WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/app ./app
+COPY tests ./tests
 
 EXPOSE 8000
 

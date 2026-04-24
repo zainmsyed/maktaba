@@ -1,6 +1,6 @@
 # Story 002: Define database schema and backend models
 
-**Status:** not-started  
+**Status:** in-progress  
 **Created:** 2026-04-24  
 **Last accessed:** 2026-04-24  
 **Completed:** —
@@ -29,11 +29,11 @@ Start the backend against Postgres and confirm the MVP tables are created with t
 ---
 
 ## Checklist
-- [ ] Add SQLModel model definitions for the MVP tables
-- [ ] Add startup or migration logic to create tables safely
-- [ ] Enable the vector extension in Postgres
-- [ ] Add indexes needed for document lookup, note lookup, jobs, vector search, and FTS
-- [ ] Verify soft-delete and import fields exist where required
+- [x] Add SQLModel model definitions for the MVP tables
+- [x] Add startup or migration logic to create tables safely
+- [x] Enable the vector extension in Postgres
+- [x] Add indexes needed for document lookup, note lookup, jobs, vector search, and FTS
+- [x] Verify soft-delete and import fields exist where required
 
 ---
 
@@ -42,4 +42,7 @@ Start the backend against Postgres and confirm the MVP tables are created with t
 ---
 
 ## Completion Summary
+- Added SQLModel models for documents, pages, highlights, notes, jobs, config, embeddings, entities, and triples.
+- Added startup schema initialization that enables the pgvector extension and creates the MVP tables and indexes safely.
+- Added pgvector to the backend dependency set and verified the resulting schema against Postgres.
 
