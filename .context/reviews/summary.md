@@ -1,6 +1,6 @@
 # Review Summary
 
-**Last updated:** 2026-04-24T17:46:10Z
+**Last updated:** 2026-04-24T17:51:39Z
 
 ## Findings
 - When adding a new service scaffold, include at least one smoke test and CI job to validate build-and-run. | count: 1 | status: tracked | sources: review-20260424-171509.md
