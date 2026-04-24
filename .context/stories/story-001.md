@@ -30,11 +30,11 @@ Run `docker compose up --build` and confirm the frontend shell loads and the bac
 ---
 
 ## Checklist
-- [ ] Create the frontend and backend project folders
-- [ ] Add Docker Compose services for frontend, backend, and Postgres
-- [ ] Add environment variable wiring for database and data paths
-- [ ] Add a backend health endpoint
-- [ ] Add a frontend shell route that boots inside Docker
+- [x] Create the frontend and backend project folders
+- [x] Add Docker Compose services for frontend, backend, and Postgres
+- [x] Add environment variable wiring for database and data paths
+- [x] Add a backend health endpoint
+- [x] Add a frontend shell route that boots inside Docker
 
 ---
 
@@ -43,4 +43,8 @@ Run `docker compose up --build` and confirm the frontend shell loads and the bac
 ---
 
 ## Completion Summary
+- Added a minimal SvelteKit frontend shell with a live backend health check.
+- Added a FastAPI backend with `/health`, CORS, and startup creation of `/data` subdirectories.
+- Switched the backend to `uv` with `pyproject.toml`, `uv.lock`, and a local `.venv` workflow.
+- Added Dockerfiles, Docker Compose wiring, an example env file, tracked data directories for Postgres and app storage, and a backend README with local `uv` commands.
 

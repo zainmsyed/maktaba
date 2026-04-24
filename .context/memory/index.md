@@ -9,3 +9,18 @@
 .pi/lib/vazir-helpers.ts — Shared utility functions used across Vazir extensions (logging, config helpers, small utilities).
 .pi/skills/vazir-base/SKILL.md — Vazir baseline skill instructions
 AGENTS.md — Cross-framework project guidance and working notes
+
+backend/app/__init__.py — (undescribed)
+backend/app/main.py — (undescribed)
+docker-compose.yml — (undescribed)
+frontend/package.json — (undescribed)
+frontend/src/app.css — (undescribed)
+frontend/src/app.d.ts — (undescribed)
+frontend/src/app.html — (undescribed)
+frontend/src/routes/+layout.svelte — (undescribed)
+frontend/src/routes/+page.server.ts — (undescribed)
+frontend/src/routes/+page.svelte — (undescribed)
+frontend/svelte.config.js — (undescribed)
+frontend/tsconfig.json — (undescribed)
+frontend/vite.config.ts — (undescribed)
+backend/pyproject.toml — (undescribed)

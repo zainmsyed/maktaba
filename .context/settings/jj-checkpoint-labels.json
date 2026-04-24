@@ -11,6 +11,20 @@
     "5e3ce6cd": "lets do leave the thumbnails off for now",
     "d66135b8": "lets do pdf first and then epub but epub is part of the mvp",
     "69a5b215": "yes",
-    "e8f5f053": "it looks good but please update the stories to match the vazir template exactly"
+    "e8f5f053": "it looks good but please update the stories to match the vazir template exactly",
+    "32a78c15": "https://github.com/zainmsyed/maktaba.git\n\nok great please commit and push this t",
+    "600297cc": "impliment this story 1",
+    "5769d306": "did we add a venv for the python backend? if not we need to and I would like to ",
+    "6f8c571f": "i would liek to UV overall for this project. find it much easier and faster to u",
+    "ac4c7845": "yes please",
+    "0c48bec4": "Write one short reusable lesson to .context/reviews/remembered.md based on the r",
+    "e34ca28c": "If you want, I can also add a small backend README with the exact uv commands fo",
+    "e30bbcda": "If you want, I can also add a small backend README with the exact uv commands fo",
+    "e651fb98": "yes fix now",
+    "6f2775d0": "please fix those",
+    "b10964a6": "can you make sure were using the latest versions of all deendecies",
+    "428d79aa": "whats the manifest?",
+    "1a60674b": "a for now",
+    "dcb7ffbd": "Most of your backend packages are at (or within one patch of) the latest release"
   }
 }

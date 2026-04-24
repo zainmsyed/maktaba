@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  compose-smoke-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and start compose stack
+        env:
+          DB_PASSWORD: change-me
+        run: docker compose up --build -d --wait
+
+      - name: Verify backend health
+        run: curl --fail --silent --show-error http://localhost:8000/health
+
+      - name: Verify frontend shell
+        run: curl --fail --silent --show-error http://localhost:3000 >/dev/null
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

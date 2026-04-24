@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-maktaba}"
+      POSTGRES_USER: "${POSTGRES_USER:-app}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?set DB_PASSWORD in .env}"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-maktaba}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:?set DB_PASSWORD in .env}@postgres/${POSTGRES_DB:-maktaba}"
+      DATA_DIR: "${DATA_DIR:-/data}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
+    volumes:
+      - ./data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)\""
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    environment:
+      PUBLIC_API_URL: "${PUBLIC_API_URL:-http://localhost:8000}"
+      PORT: "3000"
+      HOST: "0.0.0.0"
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
