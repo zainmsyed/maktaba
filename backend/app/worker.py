@@ -20,7 +20,8 @@ SLEEP_SECONDS = 2.0
 
 def _claim_job(session: Session) -> Optional[Job]:
     stmt = select(Job).where(Job.status == "pending", Job.job_type == "extract_text").order_by(Job.created_at)
-    job = session.exec(stmt).scalars().first()
+    res = session.exec(stmt)
+    job = res.first()
     if job is None:
         return None
     job.status = "processing"
@@ -38,6 +39,15 @@ def process_extract_job(session: Session, job: Job) -> None:
         doc = session.get(Document, job.document_id)
         if doc is None:
             raise RuntimeError("document not found for job")
+
+        # Only process PDFs in this worker; EPUB processing is out of scope here.
+        if (getattr(doc, 'format', None) or '').lower() != 'pdf':
+            logger.info("Skipping extract_text job %s for non-PDF document %s (format=%s)", job.id, doc.id, doc.format)
+            job.status = "completed"
+            job.completed_at = datetime.now(timezone.utc)
+            session.add(job)
+            session.commit()
+            return
 
         pdf_path = doc.file_path
         logger.info("Processing extract_text job %s for document %s", job.id, doc.id)
@@ -58,7 +68,7 @@ def process_extract_job(session: Session, job: Job) -> None:
             # try to find existing page
             existing = session.exec(
                 select(Page).where(Page.document_id == p.document_id, Page.page_number == p.page_number)
-            ).scalars().first()
+            ).first()
             if existing is None:
                 session.add(p)
             else:
