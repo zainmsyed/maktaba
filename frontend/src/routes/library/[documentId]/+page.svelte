@@ -40,6 +40,120 @@
   let stageSize = { width: 0, height: 0 };
   let loadingTask: any = null;
 
+  // highlights and selection state
+  let highlights: any[] = [];
+  let selecting = false;
+  let selStart = { x: 0, y: 0 };
+  let selRect = { left: 0, top: 0, width: 0, height: 0 };
+
+  async function loadHighlights() {
+    try {
+      const resp = await fetch(`${data.apiUrl}/api/documents/${data.document.id}/highlights`);
+      if (!resp.ok) {
+        console.error('Failed to load highlights', resp.status);
+        return;
+      }
+      const payload = await resp.json();
+      highlights = payload.highlights || [];
+    } catch (e) {
+      console.error('Failed to load highlights', e);
+    }
+  }
+
+  function getHighlightStyle(h: any) {
+    if (!canvasEl) return '';
+    const cw = canvasEl.clientWidth || 0;
+    const ch = canvasEl.clientHeight || 0;
+    const left = Math.round((h.x || 0) * cw);
+    const top = Math.round((h.y || 0) * ch);
+    const width = Math.max(1, Math.round((h.width || 0) * cw));
+    const height = Math.max(1, Math.round((h.height || 0) * ch));
+    return `left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px;`;
+  }
+
+  async function createHighlight(payload: { page_number: number; x: number; y: number; width: number; height: number }) {
+    try {
+      const resp = await fetch(`${data.apiUrl}/api/documents/${data.document.id}/highlights`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Failed to create highlight: ${resp.status} ${txt}`);
+      }
+      const json = await resp.json();
+      // append highlight
+      highlights = [...highlights, json.highlight];
+    } catch (e) {
+      console.error(e);
+      alert('Unable to create highlight');
+    }
+  }
+
+  async function deleteHighlightById(id: string) {
+    try {
+      const resp = await fetch(`${data.apiUrl}/api/highlights/${id}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error(`Failed to delete: ${resp.status}`);
+      highlights = highlights.filter((h) => h.id !== id);
+    } catch (e) {
+      console.error(e);
+      alert('Unable to delete highlight');
+    }
+  }
+
+  function onHighlightClick(h: any) {
+    // show extracted text and ask for delete
+    const ok = confirm(`Highlight text:\n\n${h.extracted_text || '<no text>'}\n\nDelete this highlight?`);
+    if (ok) {
+      void deleteHighlightById(h.id);
+    }
+  }
+
+  function onOverlayMouseDown(event: MouseEvent) {
+    if (!canvasEl) return;
+    if ((event as MouseEvent).button !== 0) return;
+    const target = event.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const offsetX = (event as MouseEvent).clientX - rect.left;
+    const offsetY = (event as MouseEvent).clientY - rect.top;
+    selecting = true;
+    selStart = { x: offsetX, y: offsetY };
+    selRect = { left: offsetX, top: offsetY, width: 0, height: 0 };
+  }
+
+  function onOverlayMouseMove(event: MouseEvent) {
+    if (!selecting) return;
+    const target = event.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const offsetX = (event as MouseEvent).clientX - rect.left;
+    const offsetY = (event as MouseEvent).clientY - rect.top;
+    const x = Math.min(selStart.x, offsetX);
+    const y = Math.min(selStart.y, offsetY);
+    const w = Math.abs(offsetX - selStart.x);
+    const h = Math.abs(offsetY - selStart.y);
+    selRect = { left: x, top: y, width: w, height: h };
+  }
+
+  function onOverlayMouseUp(_event: MouseEvent) {
+    if (!selecting || !canvasEl) return;
+    selecting = false;
+    const cw = canvasEl.clientWidth || 0;
+    const ch = canvasEl.clientHeight || 0;
+    if (cw <= 0 || ch <= 0) return;
+    const nx = selRect.left / cw;
+    const ny = selRect.top / ch;
+    const nw = selRect.width / cw;
+    const nh = selRect.height / ch;
+    // ignore tiny selections
+    if (nw < 0.01 || nh < 0.01) {
+      selRect = { left: 0, top: 0, width: 0, height: 0 };
+      return;
+    }
+    void createHighlight({ page_number: currentPage, x: nx, y: ny, width: nw, height: nh });
+    selRect = { left: 0, top: 0, width: 0, height: 0 };
+  }
+
   $: documentTitle = data.document.title ?? 'Untitled';
   $: authorsLabel = data.document.authors && data.document.authors.length > 0
     ? data.document.authors.join(', ')
@@ -221,6 +335,8 @@
       await tick();
       updateStageSize();
       await renderCurrentPage();
+      // load persisted highlights for this document
+      void loadHighlights();
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
       loading = false;
@@ -447,10 +563,38 @@
               Loading PDF…
             </div>
           {:else}
-            <canvas
-              bind:this={canvasEl}
-              class="max-w-none rounded-lg bg-white shadow-2xl shadow-black/30"
-            ></canvas>
+            <div class="relative inline-block">
+              <canvas
+                bind:this={canvasEl}
+                class="max-w-none rounded-lg bg-white shadow-2xl shadow-black/30"
+              ></canvas>
+
+              <!-- highlight overlay and selection layer -->
+              <div
+                class="absolute inset-0 z-20"
+                on:mousedown|preventDefault={onOverlayMouseDown}
+                on:mousemove|preventDefault={onOverlayMouseMove}
+                on:mouseup|preventDefault={onOverlayMouseUp}
+                style="cursor: crosshair;"
+              >
+                {#each highlights as h (h.id)}
+                  {#if h.page_number === currentPage}
+                    <div
+                      class="absolute rounded-sm bg-amber-400/30 border border-amber-400/40"
+                      style={getHighlightStyle(h)}
+                      on:click={(e) => { e.stopPropagation(); onHighlightClick(h); }}
+                    ></div>
+                  {/if}
+                {/each}
+
+                {#if selecting}
+                  <div
+                    class="absolute rounded-sm bg-cyan-300/20 border border-cyan-300"
+                    style={`left: ${selRect.left}px; top: ${selRect.top}px; width: ${selRect.width}px; height: ${selRect.height}px;`}
+                  ></div>
+                {/if}
+              </div>
+            </div>
           {/if}
         </div>
       </section>

@@ -7,15 +7,17 @@ from typing import AsyncIterator
 from uuid import UUID
 from collections import defaultdict
 
-from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 from sqlalchemy import select
+from pydantic import BaseModel
+from pathlib import Path
 
 from app.db import get_session, initialize_database
 from app.uploads import create_document_upload
-from app.models import Document, Job
+from app.models import Document, Job, Highlight
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data")).resolve()
 CORS_ORIGINS = [
@@ -202,3 +204,95 @@ def list_documents(session: Session = Depends(get_session)) -> dict[str, object]
             "jobs": [_sanitize_job(job) for job in jobs_by_doc.get(doc.id, [])],
         })
     return {"documents": result}
+
+
+class HighlightCreate(BaseModel):
+    page_number: int
+    x: float
+    y: float
+    width: float
+    height: float
+    color: str | None = None
+
+
+@app.post("/api/documents/{document_id}/highlights")
+def create_highlight(
+    document_id: UUID,
+    payload: HighlightCreate = Body(...),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    document = session.exec(select(Document).where(Document.id == document_id)).scalars().first()
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if (document.format or "").lower() != "pdf":
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Only PDF highlights are supported.")
+
+    # derive extracted text from the PDF using PyMuPDF for the provided normalized geometry
+    try:
+        import fitz
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="PDF extraction not available")
+
+    pdf_path = Path(document.file_path)
+    if not pdf_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document file not found")
+
+    try:
+        doc = fitz.open(str(pdf_path))
+        page = doc.load_page(payload.page_number - 1)
+        pw = page.rect.width
+        ph = page.rect.height
+        clip = fitz.Rect(
+            payload.x * pw,
+            payload.y * ph,
+            (payload.x + payload.width) * pw,
+            (payload.y + payload.height) * ph,
+        )
+        extracted_text = page.get_text("text", clip=clip) or ""
+        doc.close()
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+    highlight = Highlight(
+        document_id=document_id,
+        format="pdf",
+        page_number=payload.page_number,
+        x=payload.x,
+        y=payload.y,
+        width=payload.width,
+        height=payload.height,
+        extracted_text=extracted_text,
+        color=payload.color or "yellow",
+    )
+    session.add(highlight)
+    session.commit()
+    session.refresh(highlight)
+
+    h = highlight.model_dump(mode="json")
+    # remove fts column if present
+    h.pop("fts", None)
+    return {"highlight": h}
+
+
+@app.get("/api/documents/{document_id}/highlights")
+def list_highlights(document_id: UUID, session: Session = Depends(get_session)) -> dict[str, object]:
+    highlights = session.exec(select(Highlight).where(Highlight.document_id == document_id).order_by(Highlight.created_at)).scalars().all()
+    result = []
+    for h in highlights:
+        try:
+            obj = h.model_dump(mode="json")
+        except Exception:
+            obj = dict(h)
+        obj.pop("fts", None)
+        result.append(obj)
+    return {"highlights": result}
+
+
+@app.delete("/api/highlights/{highlight_id}")
+def delete_highlight(highlight_id: UUID, session: Session = Depends(get_session)) -> dict[str, object]:
+    h = session.get(Highlight, highlight_id)
+    if h is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Highlight not found")
+    session.delete(h)
+    session.commit()
+    return {"deleted": True}
