@@ -1,8 +1,8 @@
 # Story 004: Implement library UI and upload flow
 
-**Status:** not-started  
+**Status:** in-progress  
 **Created:** 2026-04-24  
-**Last accessed:** 2026-04-24  
+**Last accessed:** 2026-04-25  
 **Completed:** —
 
 ---

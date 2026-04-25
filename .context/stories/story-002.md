@@ -1,9 +1,9 @@
 # Story 002: Define database schema and backend models
 
-**Status:** in-progress  
+**Status:** complete  
 **Created:** 2026-04-24  
 **Last accessed:** 2026-04-24  
-**Completed:** —
+**Completed:** 2026-04-24
 
 ---
 

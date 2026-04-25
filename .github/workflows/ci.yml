@@ -25,6 +25,9 @@ jobs:
       - name: Verify frontend shell
         run: curl --fail --silent --show-error http://localhost:3000 >/dev/null
 
+      - name: Run backend document upload test
+        run: docker compose exec -T backend python -m unittest tests.test_document_upload
+
       - name: Run backend schema smoke test
         run: docker compose exec -T backend python -m unittest tests.test_schema_smoke
 

@@ -1,5 +1,6 @@
 {
   "labels": {
+    "18111688": "getting this when i go to api/documents\n\n{\"detail\":\"Method Not Allowed\"}",
     "e8d48ce5": "Complete the Vazir bootstrap context drafting using the currently selected Pi mo",
     "8bd72900": "The user wants to plan their project.\nNo story files are pre-seeded in .context/",
     "b149e3a1": "MVP/V1 for now",
@@ -34,6 +35,14 @@
     "421ddc64": "yes please",
     "543e6b7c": "why are you showinf me the options to view story etc. from the vazir extensions?",
     "0fb4b368": "no i mean after the /complete-story command its supposed to prompt some options.",
-    "a9bf54be": "can you look at the other reviews that havent been completed and impliment those"
+    "a9bf54be": "can you look at the other reviews that havent been completed and impliment those",
+    "e10d25fe": "commit and push to new branch",
+    "5a0761b4": "CAN WE RENAME BRANCH something else like scaffold?",
+    "dace6e17": "imliment this story",
+    "9fc8a071": "yes",
+    "5dba8844": "how do i test it?",
+    "f14de371": "so how are we going to check if I can upload a pdf and or epub?",
+    "3f57b312": "so how are we going to check if I can upload a pdf and or epub?",
+    "f0a40be2": "so how are we going to check if I can upload a pdf and or epub?"
   }
 }

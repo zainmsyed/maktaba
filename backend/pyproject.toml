@@ -5,9 +5,12 @@ description = "FastAPI backend for Maktaba"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
   "pgvector>=0.4,<1",
   "pydantic-settings>=2.6,<3",
+  "pypdf>=5,<6",
   "psycopg[binary]>=3.2,<4",
+  "python-multipart>=0.0.9,<1",
   "sqlmodel>=0.0.22,<1",
   "uvicorn[standard]>=0.30,<1",
 ]

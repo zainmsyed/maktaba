@@ -5,10 +5,12 @@ from pathlib import Path
 import os
 from typing import AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, File, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import Session
 
-from app.db import initialize_database
+from app.db import get_session, initialize_database
+from app.uploads import create_document_upload
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data")).resolve()
 CORS_ORIGINS = [
@@ -64,4 +66,21 @@ def health() -> dict[str, object]:
             "epubs": str(DATA_DIR / "epubs"),
             "thumbs": str(DATA_DIR / "thumbs"),
         },
+    }
+
+
+@app.post("/api/documents")
+async def upload_document(
+    response: Response,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    result = await create_document_upload(session, file, DATA_DIR)
+    response.status_code = (
+        status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
+    )
+    return {
+        "created": result.created,
+        "document": result.document.model_dump(mode="json"),
+        "jobs": [job.model_dump(mode="json") for job in result.jobs],
     }
