@@ -11,6 +11,7 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 from uuid import uuid4
+from datetime import datetime, timezone
 
 from fastapi import UploadFile
 from fastapi.testclient import TestClient
@@ -207,16 +208,19 @@ class DocumentUploadTests(unittest.TestCase):
         self.assertEqual(document["page_count"], 1)
         self.assertEqual(document["publication_date"], "2024-04-24")
         self.assertEqual(document["file_hash"], expected_hash)
-        self.assertTrue(document["file_path"].endswith(f"{expected_hash}.pdf"))
-        self.assertTrue(Path(document["file_path"]).is_file())
+        # file_path is intentionally not exposed in the public API; verify the
+        # file exists on disk under the configured DATA_DIR instead.
+        storage_path = self.data_dir / "pdfs" / f"{expected_hash}.pdf"
+        self.assertTrue(storage_path.is_file())
         self.assertEqual(
-            hashlib.sha256(Path(document["file_path"]).read_bytes()).hexdigest(),
+            hashlib.sha256(storage_path.read_bytes()).hexdigest(),
             expected_hash,
         )
 
         job_types = {job["job_type"] for job in payload["jobs"]}
         self.assertEqual(job_types, {"extract_text", "generate_embedding"})
         self.assertEqual({job["status"] for job in payload["jobs"]}, {"pending"})
+        self.assertTrue(all("file_path" not in job.get("payload", {}) for job in payload["jobs"]))
 
         with self.db_module.Session(self.db_module.engine) as session:
             stored_documents = session.exec(select(Document)).all()
@@ -248,16 +252,19 @@ class DocumentUploadTests(unittest.TestCase):
         self.assertEqual(document["page_count"], 1)
         self.assertEqual(document["publication_date"], "2024-04-24")
         self.assertEqual(document["file_hash"], expected_hash)
-        self.assertTrue(document["file_path"].endswith(f"{expected_hash}.epub"))
-        self.assertTrue(Path(document["file_path"]).is_file())
+        # file_path is intentionally not exposed in the public API; verify the
+        # file exists on disk under the configured DATA_DIR instead.
+        storage_path = self.data_dir / "epubs" / f"{expected_hash}.epub"
+        self.assertTrue(storage_path.is_file())
         self.assertEqual(
-            hashlib.sha256(Path(document["file_path"]).read_bytes()).hexdigest(),
+            hashlib.sha256(storage_path.read_bytes()).hexdigest(),
             expected_hash,
         )
 
         job_types = {job["job_type"] for job in payload["jobs"]}
         self.assertEqual(job_types, {"extract_text", "generate_embedding"})
         self.assertEqual({job["status"] for job in payload["jobs"]}, {"pending"})
+        self.assertTrue(all("file_path" not in job.get("payload", {}) for job in payload["jobs"]))
 
         with self.db_module.Session(self.db_module.engine) as session:
             stored_documents = session.exec(select(Document)).all()
@@ -338,3 +345,62 @@ class DocumentUploadTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 415)
         self.assertIn("PDF and EPUB", response.json()["detail"])
+
+    def test_get_documents_listing_and_deleted_exclusion(self) -> None:
+        # Upload one document and verify it appears in the listing, then mark it
+        # deleted and ensure it is excluded from subsequent listings.
+        pdf_bytes = self._build_pdf_bytes(
+            title="List Test PDF",
+            author="Test Author",
+            creation_date="D:20240424010203Z",
+        )
+        expected_hash = hashlib.sha256(pdf_bytes).hexdigest()
+
+        response = self.client.post(
+            "/api/documents",
+            files={"file": ("list.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(response.status_code, 201)
+
+        list_resp = self.client.get("/api/documents")
+        self.assertEqual(list_resp.status_code, 200)
+        payload = list_resp.json()
+        docs = payload.get("documents", [])
+        self.assertEqual(len(docs), 1)
+        doc = docs[0]["document"]
+        self.assertEqual(doc["file_hash"], expected_hash)
+        self.assertNotIn("file_path", doc)
+        self.assertTrue(all("file_path" not in job.get("payload", {}) for job in docs[0]["jobs"]))
+
+        # Now mark the document deleted and assert it is excluded from listing
+        with self.db_module.Session(self.db_module.engine) as session:
+            stored = session.exec(select(Document).where(Document.file_hash == expected_hash)).first()
+            self.assertIsNotNone(stored)
+            stored.deleted_at = datetime.now(timezone.utc)
+            session.add(stored)
+            session.commit()
+
+        list_resp2 = self.client.get("/api/documents")
+        self.assertEqual(list_resp2.status_code, 200)
+        docs2 = list_resp2.json().get("documents", [])
+        self.assertEqual(len(docs2), 0)
+
+    def test_stream_document_pdf_returns_pdf_bytes(self) -> None:
+        pdf_bytes = self._build_pdf_bytes(
+            title="Streaming PDF",
+            author="Reader Test",
+            creation_date="D:20240424010203Z",
+        )
+
+        response = self.client.post(
+            "/api/documents",
+            files={"file": ("stream.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(response.status_code, 201)
+        document_id = response.json()["document"]["id"]
+
+        stream_resp = self.client.get(f"/api/documents/{document_id}/file")
+        self.assertEqual(stream_resp.status_code, 200)
+        self.assertEqual(stream_resp.headers.get("content-type", "").split(";")[0], "application/pdf")
+        self.assertIn("inline", stream_resp.headers.get("content-disposition", ""))
+        self.assertEqual(stream_resp.content, pdf_bytes)

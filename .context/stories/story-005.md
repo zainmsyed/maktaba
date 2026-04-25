@@ -1,9 +1,9 @@
 # Story 005: Deliver the PDF reader shell
 
-**Status:** not-started  
+**Status:** complete  
 **Created:** 2026-04-24  
-**Last accessed:** 2026-04-24  
-**Completed:** —
+**Last accessed:** 2026-04-25  
+**Completed:** 2026-04-25
 
 ---
 
@@ -32,17 +32,22 @@ Open an uploaded PDF in the reader and confirm it renders with fit-width by defa
 ---
 
 ## Checklist
-- [ ] Add a reader route for opening a selected document
-- [ ] Stream PDF binaries from the backend to the frontend
-- [ ] Integrate PDF.js into the reader view
-- [ ] Add fit-width, fit-page, and custom zoom controls
-- [ ] Add page navigation controls and current page display
+- [x] Add a reader route for opening a selected document
+- [x] Stream PDF binaries from the backend to the frontend
+- [x] Integrate PDF.js into the reader view
+- [x] Add fit-width, fit-page, and custom zoom controls
+- [x] Add page navigation controls and current page display
 
 ---
 
 ## Issues
+- None
 
 ---
 
 ## Completion Summary
+- Added a dedicated PDF reader route at `/library/[documentId]` with a desktop split-pane layout, document metadata, status summary, page navigation, fit-width / fit-page / custom zoom controls, and a rendered PDF.js canvas.
+- Wired the library cards to open PDF documents in the reader instead of the previous placeholder alert; non-PDF documents now show a disabled “PDF only” state.
+- Added a backend streaming endpoint for PDF binaries at `/api/documents/{document_id}/file` and covered it with a regression test that verifies the streamed bytes match the uploaded PDF.
+- Added frontend coverage for the reader shell and existing library flow so the route, controls, and upload replacement behavior stay exercised.
 

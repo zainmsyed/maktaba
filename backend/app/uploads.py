@@ -259,10 +259,16 @@ def _extract_document_metadata(
 
 
 def _job_payload(document: Document, step: str) -> dict[str, Any]:
+    """Construct a payload for background jobs. This payload is stored
+    in the Job record but should avoid exposing internal implementation
+    details to external API consumers (e.g. filesystem paths).
+
+    Note: we intentionally do not include `file_path` here; consumers
+    should rely on `file_hash` or a download endpoint if necessary.
+    """
     return {
         "step": step,
         "document_id": str(document.id),
-        "file_path": document.file_path,
         "file_hash": document.file_hash,
         "format": document.format,
         "title": document.title,

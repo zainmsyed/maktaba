@@ -186,11 +186,74 @@ function buildImplementStoryInstruction(storyPath: string): string {
   ].join("\n");
 }
 
-function resolveStoryForImplementation(cwd: string): StoryFrontmatter | null {
+function implementStoryPickerLabel(cwd: string, storyFile: string): string {
+  const pickerChoice = storyPickerChoices(cwd).find(choice => choice.kind === "story" && choice.file === storyFile);
+  if (!pickerChoice) {
+    return path.basename(storyFile, ".md");
+  }
+
+  return pickerChoice.label;
+}
+
+function implementStoryStartLabel(cwd: string, storyFile: string): string {
+  const pickerChoice = implementStoryPickerLabel(cwd, storyFile);
+  const labelParts = pickerChoice.split(" — ");
+  const storyNumber = labelParts[0]?.replace(/^story-/, "story ") || path.basename(storyFile, ".md");
+  const titleAndAge = labelParts.slice(2).join(" — ");
+  return titleAndAge ? `Start ${storyNumber} — ${titleAndAge}` : `Start ${storyNumber}`;
+}
+
+async function resolveStoryForImplementation(
+  cwd: string,
+  ui: { select: (prompt: string, choices: string[]) => Promise<string | undefined> },
+): Promise<StoryFrontmatter | null> {
   const active = findActiveStory(cwd);
   if (active) return active;
 
-  return null;
+  const candidates = nonTerminalStories(cwd)
+    .filter(story => story.status === "in-progress" || story.status === "not-started")
+    .sort((left, right) => left.number - right.number);
+  const firstStory = candidates[0];
+  const startNextStoryLabel = firstStory
+    ? implementStoryStartLabel(cwd, firstStory.file)
+    : "Start story — begin the earliest open story";
+  const pickStoryLabel = "Pick story — choose an existing story to implement";
+
+  const choice = await ui.select("No in-progress story found. What would you like to do?", [
+    pickStoryLabel,
+    startNextStoryLabel,
+    "Cancel",
+  ]);
+
+  if (!choice || choice === "Cancel") return null;
+
+  if (choice === startNextStoryLabel) {
+    if (!firstStory) return null;
+
+    const now = todayDate();
+    updateStoryFrontmatter(firstStory.file, { status: "in-progress", lastAccessed: now });
+    return { ...firstStory, status: "in-progress", lastAccessed: now };
+  }
+
+  if (choice !== pickStoryLabel || candidates.length === 0) {
+    return null;
+  }
+
+  const labels = candidates.map(story => implementStoryPickerLabel(cwd, story.file));
+  const pick = await ui.select("Which story should /implement use?", [...labels, "Cancel"]);
+  if (!pick || pick === "Cancel") return null;
+
+  const selectedIndex = labels.indexOf(pick);
+  if (selectedIndex < 0) return null;
+
+  const selected = candidates[selectedIndex];
+  if (selected.status === "not-started") {
+    const now = todayDate();
+    updateStoryFrontmatter(selected.file, { status: "in-progress", lastAccessed: now });
+    return { ...selected, status: "in-progress", lastAccessed: now };
+  }
+
+  return selected;
 }
 
 export function refreshVcsState(cwd: string): void {
@@ -638,7 +701,7 @@ export default function (pi: ExtensionAPI) {
 
   const implementStoryHandler = async (_args: string, ctx: { cwd: string; ui: any }) => {
     const cwd = ctx.cwd;
-    const story = resolveStoryForImplementation(cwd);
+    const story = await resolveStoryForImplementation(cwd, ctx.ui);
 
     if (!story) {
       ctx.ui.notify("No in-progress story is available to implement.", "info");
