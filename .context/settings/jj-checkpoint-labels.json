@@ -69,6 +69,16 @@
     "be44c19b": "please restart container",
     "c07baa16": "please restart container",
     "f2538701": "please restart container",
-    "c6301d43": "commit and push"
+    "c6301d43": "commit and push",
+    "67a7842a": "Implement the in-progress story in .context/stories/story-006.md.\n\nYour job:\n1. ",
+    "a9c8e0cd": "lets test it first",
+    "899f675c": "is ther a way i can manually verify also should we test the ocr?",
+    "af16ce75": "we have 2 pdfs in there and here is scanned pdf /home/zain/Downloads/PublicWater",
+    "d78e6f73": "great! lets put in the ocr deps",
+    "49e733a5": "yes please",
+    "9d09d253": "did something get stuck?",
+    "75edd563": "did something get stuck?",
+    "f4f457fc": "did something get stuck?",
+    "9a0dda59": "did something get stuck?"
   }
 }

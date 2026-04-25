@@ -1,9 +1,9 @@
 # Story 006: Add PDF text extraction and OCR fallback
 
-**Status:** in-progress  
+**Status:** complete  
 **Created:** 2026-04-24  
 **Last accessed:** 2026-04-25  
-**Completed:** —
+**Completed:** 2026-04-25
 
 ---
 
@@ -41,21 +41,30 @@ Process a text PDF and a scanned PDF, then confirm page text is stored for both 
 ---
 
 ## Issues
-- Runtime dependencies: PyMuPDF (PyMuPDF), Pillow and pytesseract (Python packages), and the Tesseract OCR binary are required to perform OCR. These are optional at import-time in the implementation; however, without these packages and the tesseract binary installed, OCR will not run and scanned PDFs cannot be fully verified.
-- Deployment: The worker that processes `extract_text` jobs is provided as `backend/app/worker.py` and must be run as a separate process (e.g. `python -m app.worker` or via `uv run app.worker`) to consume queued jobs. The current Docker image does not automatically start this worker; adding it to docker-compose is a separate step.
 
 ---
 
 ## Completion Summary
 Implementation notes:
-- Added per-page extraction logic in `backend/app/extract.py` using PyMuPDF (fitz). The function `extract_text_and_fallback` returns (page_number, text, ocr_used) tuples and will attempt OCR with pytesseract when the PDF text layer is insubstantial.
+- Added per-page extraction logic in `backend/app/extract.py` using PyMuPDF (fitz). The function `extract_text_and_fallback` returns (page_number, text, ocr_used) tuples and attempts OCR with pytesseract when the PDF text layer is insubstantial.
 - Added a worker (`backend/app/worker.py`) which claims pending `extract_text` jobs, runs extraction, persists `Page` rows (setting `extracted_text` and `ocr_used`), and updates the `Job` status to `completed` or `failed` with an error message.
+- The worker now skips non-PDF `extract_text` jobs instead of failing them, which keeps EPUB jobs from blocking the queue.
+- OCR runtime dependencies are now baked into the backend image and lockfile: PyMuPDF, Pillow, pytesseract, and the Tesseract OCR binary.
+- Added a `worker` service to `docker-compose.yml` so the extraction queue is consumed automatically alongside the backend stack.
 
-Verification steps to run locally:
-1. Ensure system-level Tesseract is installed (if you want OCR): `tesseract --version`.
-2. In the backend environment, install Python extras: `pip install PyMuPDF Pillow pytesseract`.
-3. Start the backend normally (docker-compose or uvicorn). Upload a text PDF and a scanned PDF via the UI or `POST /api/documents`.
-4. Start the worker in a separate terminal: `python -m app.worker` (or `uv run app.worker`). The worker will claim `extract_text` jobs and populate the `pages` table with extracted text and `ocr_used` flags.
+Verification performed in the running Docker stack:
+- Rebuilt the backend/worker images with the OCR dependencies installed and confirmed the container imports `fitz`, `pytesseract`, and `PIL`, and that `tesseract --version` works.
+- Started the new worker service with `docker compose up -d --build worker` and confirmed it stays up and logs `Starting worker loop (extract_text)`.
+- Text PDFs already in the library were processed and produced page text with `ocr_used = false` on every page.
+- Uploaded `/home/zain/Downloads/PublicWaterMassMailing.pdf` as a scanned PDF, ran the worker after rebuilding the backend image, and confirmed all 8 pages were stored with extracted text and `ocr_used = true`.
+- Verified via SQL queries against the `pages` and `jobs` tables that the extract_text jobs completed and the scanned PDF used OCR only on scanned pages.
 
-Status: Implementation complete from a code perspective. Manual verification requires installing the optional OCR dependencies and running the worker process (see Issues above). Do not mark the story complete yet — follow-up: run the worker and verify extraction + OCR flags for sample PDFs.
+Manual verification commands used:
+1. Rebuild and start the worker service: `docker compose up -d --build worker` (or the full compose stack).
+2. Confirm OCR dependencies are present inside the container: `/app/.venv/bin/python -c "import fitz, pytesseract; from PIL import Image"` and `tesseract --version`.
+3. Upload the scanned PDF via `POST /api/documents`.
+4. Run the worker helper (`python -m app.worker` or `run_once()` in the backend container) to process `extract_text` jobs.
+5. Query `pages` for the document to confirm `ocr_used` is true and extracted text is present.
+
+Status: The implementation is functionally verified in the current Docker environment and the queue worker is now wired into docker-compose for automatic processing. The only remaining operational caveat is to ensure the compose stack is kept running in deployment.
 

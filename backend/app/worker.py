@@ -82,9 +82,11 @@ def process_extract_job(session: Session, job: Job) -> None:
         session.commit()
         logger.info("Completed extract_text job %s", job.id)
     except Exception as exc:
+        session.rollback()
         logger.exception("Failed to process extract_text job %s: %s", getattr(job, "id", None), exc)
         job.status = "failed"
         job.error_message = str(exc)
+        job.completed_at = datetime.now(timezone.utc)
         session.add(job)
         session.commit()
 

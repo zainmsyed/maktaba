@@ -1,8 +1,8 @@
 # Story 007: Persist and render PDF highlights
 
-**Status:** not-started  
+**Status:** in-progress  
 **Created:** 2026-04-24  
-**Last accessed:** 2026-04-24  
+**Last accessed:** 2026-04-25  
 **Completed:** —
 
 ---
