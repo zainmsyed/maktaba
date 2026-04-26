@@ -76,4 +76,29 @@ describe('reader page', () => {
       expect(getAllByText('2 / 3').length).toBeGreaterThan(0);
     });
   });
+
+  it('shows the highlights panel with drag instructions', async () => {
+    const { getByText } = render(ReaderPage, {
+      props: {
+        data: {
+          apiUrl: 'http://api.test',
+          fileUrl: 'http://api.test/api/documents/doc-1/file',
+          document: {
+            id: 'doc-1',
+            title: 'Highlight Panel Test',
+            authors: [],
+            format: 'pdf',
+            page_count: 1,
+          },
+          jobs: [],
+        },
+      },
+    });
+
+    await waitFor(() => {
+      expect(getByText('Highlights')).toBeTruthy();
+      expect(getByText(/Click and drag over the PDF/i)).toBeTruthy();
+      expect(getByText('No highlights on this page.')).toBeTruthy();
+    });
+  });
 });

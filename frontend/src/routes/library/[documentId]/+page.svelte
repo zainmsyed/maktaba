@@ -110,24 +110,22 @@
     }
   }
 
-  function onOverlayMouseDown(event: MouseEvent) {
-    if (!canvasEl) return;
-    if ((event as MouseEvent).button !== 0) return;
-    const target = event.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    const offsetX = (event as MouseEvent).clientX - rect.left;
-    const offsetY = (event as MouseEvent).clientY - rect.top;
-    selecting = true;
-    selStart = { x: offsetX, y: offsetY };
-    selRect = { left: offsetX, top: offsetY, width: 0, height: 0 };
-  }
+  let activePointerId: number | null = null;
+  let overlayPointerTarget: HTMLElement | null = null;
 
-  function onOverlayMouseMove(event: MouseEvent) {
+  function globalPointerMove(event: PointerEvent) {
     if (!selecting) return;
-    const target = event.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    const offsetX = (event as MouseEvent).clientX - rect.left;
-    const offsetY = (event as MouseEvent).clientY - rect.top;
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
+    let rect: DOMRect;
+    if (canvasEl) {
+      rect = canvasEl.getBoundingClientRect();
+    } else if (overlayPointerTarget) {
+      rect = overlayPointerTarget.getBoundingClientRect();
+    } else {
+      rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    }
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
     const x = Math.min(selStart.x, offsetX);
     const y = Math.min(selStart.y, offsetY);
     const w = Math.abs(offsetX - selStart.x);
@@ -135,9 +133,8 @@
     selRect = { left: x, top: y, width: w, height: h };
   }
 
-  function onOverlayMouseUp(_event: MouseEvent) {
-    if (!selecting || !canvasEl) return;
-    selecting = false;
+  function finalizeSelectionFromRect() {
+    if (!canvasEl) return;
     const cw = canvasEl.clientWidth || 0;
     const ch = canvasEl.clientHeight || 0;
     if (cw <= 0 || ch <= 0) return;
@@ -145,13 +142,78 @@
     const ny = selRect.top / ch;
     const nw = selRect.width / cw;
     const nh = selRect.height / ch;
-    // ignore tiny selections
     if (nw < 0.01 || nh < 0.01) {
       selRect = { left: 0, top: 0, width: 0, height: 0 };
       return;
     }
     void createHighlight({ page_number: currentPage, x: nx, y: ny, width: nw, height: nh });
     selRect = { left: 0, top: 0, width: 0, height: 0 };
+  }
+
+  function removeGlobalPointerListeners() {
+    if (typeof window === 'undefined') return;
+    window.removeEventListener('pointermove', globalPointerMove, true);
+    window.removeEventListener('pointerup', globalPointerUp, true);
+    window.removeEventListener('pointercancel', globalPointerCancel, true);
+  }
+
+  function globalPointerUp(event: PointerEvent) {
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
+    if (overlayPointerTarget && overlayPointerTarget.hasPointerCapture(event.pointerId)) {
+      try { overlayPointerTarget.releasePointerCapture(event.pointerId); } catch {}
+    }
+    removeGlobalPointerListeners();
+    activePointerId = null;
+    overlayPointerTarget = null;
+    if (!selecting) return;
+    selecting = false;
+    finalizeSelectionFromRect();
+  }
+
+  function globalPointerCancel(event: PointerEvent) {
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
+    removeGlobalPointerListeners();
+    activePointerId = null;
+    overlayPointerTarget = null;
+    selecting = false;
+    selRect = { left: 0, top: 0, width: 0, height: 0 };
+  }
+
+  function onOverlayPointerDown(event: PointerEvent) {
+    if (!canvasEl || event.button !== 0) return;
+    const target = event.currentTarget as HTMLElement;
+    try {
+      target.setPointerCapture(event.pointerId);
+    } catch {
+      // ignore pointer capture failures in environments that don't support it
+    }
+    activePointerId = event.pointerId;
+    overlayPointerTarget = target;
+    const rect = target.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+    selecting = true;
+    selStart = { x: offsetX, y: offsetY };
+    selRect = { left: offsetX, top: offsetY, width: 0, height: 0 };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pointermove', globalPointerMove, true);
+      window.addEventListener('pointerup', globalPointerUp, true);
+      window.addEventListener('pointercancel', globalPointerCancel, true);
+    }
+  }
+
+  function onOverlayPointerMove(event: PointerEvent) {
+    // keep compatibility: direct handler simply delegates to global handler logic
+    globalPointerMove(event);
+  }
+
+  function onOverlayPointerUp(event: PointerEvent) {
+    // delegate to the global handler
+    globalPointerUp(event);
+  }
+
+  function onOverlayPointerCancel(event: PointerEvent) {
+    globalPointerCancel(event);
   }
 
   $: documentTitle = data.document.title ?? 'Untitled';
@@ -170,9 +232,12 @@
     jobStatus === 'processing' ? 'Processing' : jobStatus === 'failed' ? 'Failed' : 'Ready';
   $: jobCountLabel = data.jobs.length === 1 ? '1 background job' : `${data.jobs.length} background jobs`;
 
-  function deriveJobStatus(jobs: Array<{ status?: string }> | undefined): JobStatus {
-    if (!jobs || jobs.length === 0) return 'ready';
-    const statuses = new Set(jobs.map((job) => job.status));
+  const BLOCKING_JOB_TYPES = new Set(['extract_text', 'ocr']);
+
+  function deriveJobStatus(jobs: Array<{ status?: string; job_type?: string }> | undefined): JobStatus {
+    const relevantJobs = (jobs || []).filter((job) => BLOCKING_JOB_TYPES.has(job.job_type || ''));
+    if (relevantJobs.length === 0) return 'ready';
+    const statuses = new Set(relevantJobs.map((job) => job.status));
     if (statuses.has('failed')) return 'failed';
     if ([...statuses].some((status) => status === 'pending' || status === 'processing')) {
       return 'processing';
@@ -422,14 +487,8 @@
     </div>
   </div>
 
-  {#if error}
-    <div class="rounded-2xl border border-rose-700 bg-rose-950/40 p-6 text-sm text-rose-100">
-      <p class="font-semibold">Unable to load the reader</p>
-      <p class="mt-2">{error}</p>
-    </div>
-  {:else}
-    <div class="grid gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
-      <aside class="space-y-4 rounded-3xl border border-slate-700/80 bg-slate-950/70 p-5 shadow-2xl shadow-cyan-950/10 lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] lg:overflow-auto">
+    <div class="grid gap-6 grid-cols-[17rem_minmax(0,1fr)]">
+      <aside class="space-y-4 rounded-3xl border border-slate-700/80 bg-slate-950/70 p-5 shadow-2xl shadow-cyan-950/10 sticky top-6 h-[calc(100vh-3rem)] overflow-auto">
         <section class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
           <div class="flex items-center justify-between gap-3">
             <div>
@@ -497,6 +556,29 @@
         </section>
 
         <section class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Highlights</p>
+          <p class="text-sm text-slate-400">Click and drag over the PDF to create a highlight. Click an existing highlight to delete it.</p>
+
+          {#if highlights.filter(h => h.page_number === currentPage).length === 0}
+            <p class="text-xs text-slate-500">No highlights on this page.</p>
+          {:else}
+            <ul class="space-y-1.5">
+              {#each highlights.filter(h => h.page_number === currentPage) as h (h.id)}
+                <li class="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 py-1.5 text-xs text-slate-300">
+                  <span class="min-w-0 flex-1 truncate">{h.extracted_text || '(no text extracted)'}</span>
+                  <button
+                    type="button"
+                    class="shrink-0 text-slate-500 transition hover:text-rose-400"
+                    aria-label="Delete highlight"
+                    on:click={() => void deleteHighlightById(h.id)}
+                  >✕</button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </section>
+
+        <section class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
           <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Zoom</p>
           <div class="grid grid-cols-2 gap-2">
             <button
@@ -558,7 +640,12 @@
           bind:this={stageEl}
           class="flex min-h-[72vh] items-center justify-center overflow-auto p-6"
         >
-          {#if loading}
+          {#if error}
+            <div class="rounded-2xl border border-rose-700 bg-rose-950/40 p-6 text-sm text-rose-100 max-w-lg">
+              <p class="font-semibold">Unable to load the reader</p>
+              <p class="mt-2">{error}</p>
+            </div>
+          {:else if loading}
             <div class="rounded-2xl border border-slate-800 bg-slate-900/70 px-6 py-5 text-sm text-slate-300">
               Loading PDF…
             </div>
@@ -571,19 +658,23 @@
 
               <!-- highlight overlay and selection layer -->
               <div
+                role="presentation"
                 class="absolute inset-0 z-20"
-                on:mousedown|preventDefault={onOverlayMouseDown}
-                on:mousemove|preventDefault={onOverlayMouseMove}
-                on:mouseup|preventDefault={onOverlayMouseUp}
-                style="cursor: crosshair;"
+                on:pointerdown={onOverlayPointerDown}
+                on:pointermove={onOverlayPointerMove}
+                on:pointerup={onOverlayPointerUp}
+                on:pointercancel={onOverlayPointerCancel}
+                style="cursor: crosshair; touch-action: none; user-select: none;"
               >
                 {#each highlights as h (h.id)}
                   {#if h.page_number === currentPage}
-                    <div
+                    <button
+                      type="button"
                       class="absolute rounded-sm bg-amber-400/30 border border-amber-400/40"
                       style={getHighlightStyle(h)}
+                      aria-label={`Highlight on page ${h.page_number}`}
                       on:click={(e) => { e.stopPropagation(); onHighlightClick(h); }}
-                    ></div>
+                    ></button>
                   {/if}
                 {/each}
 
@@ -599,5 +690,4 @@
         </div>
       </section>
     </div>
-  {/if}
 </main>

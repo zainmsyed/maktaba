@@ -60,9 +60,12 @@
     }
   });
 
+  const BLOCKING_JOB_TYPES = new Set(['extract_text', 'ocr']);
+
   function jobStatus(jobs: JobModel[] | undefined) {
-    if (!jobs || jobs.length === 0) return 'ready';
-    const statuses = new Set(jobs.map((j: any) => j.status));
+    const relevantJobs = (jobs || []).filter((job: any) => BLOCKING_JOB_TYPES.has(job.job_type || ''));
+    if (relevantJobs.length === 0) return 'ready';
+    const statuses = new Set(relevantJobs.map((j: any) => j.status));
     if (statuses.has('failed')) return 'failed';
     if ([...statuses].some((s) => s === 'pending' || s === 'processing')) return 'processing';
     return 'ready';

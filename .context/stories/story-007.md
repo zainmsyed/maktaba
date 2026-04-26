@@ -2,7 +2,7 @@
 
 **Status:** in-progress  
 **Created:** 2026-04-24  
-**Last accessed:** 2026-04-25  
+**Last accessed:** 2026-04-26  
 **Completed:** —
 
 ---
@@ -41,6 +41,13 @@ Create a highlight in a PDF, refresh the page, and confirm the highlight is stil
 ---
 
 ## Issues
+
+### /fix — "unable to make a selection and not seeing any highlight interface"
+- **Reported:** 2026-04-26  
+- **Status:** pending  
+- **Agent note:** Replaced mouse events with pointer events + `setPointerCapture`. Sidebar now always visible (error moved inside PDF pane). Removed `|preventDefault` from pointerdown; added `user-select:none` to overlay instead. Added Highlights sidebar section with drag instructions and per-page list. Fixed layout breakpoint — sidebar 2-column grid is now unconditional (no `lg:` prefix). Fixed `deriveJobStatus` to only count `extract_text`/`ocr` jobs so stuck `generate_embedding` jobs no longer show "Processing" indefinitely.
+- **Solution:** Pending browser confirmation.
+
 - None blocking. Note: the frontend extracts highlight geometry as normalized viewport coordinates (0..1) and the backend converts those to PDF points for text extraction using PyMuPDF. This relies on the frontend and backend agreeing on normalization semantics (CSS pixels -> PDF points) — tested in the running stack but keep this contract in mind if the viewer implementation changes.
 
 ---
