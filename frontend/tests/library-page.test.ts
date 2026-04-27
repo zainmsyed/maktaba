@@ -1,5 +1,6 @@
 import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
+import { advanceAndFlush } from './test-helpers';
 import LibraryPage from '../src/routes/library/+page.svelte';
 
 function jsonResponse(body: unknown, status = 200) {
@@ -223,7 +224,7 @@ describe('library page', () => {
       expect(getByText('Processing')).toBeTruthy();
     });
 
-    await vi.advanceTimersByTimeAsync(5000);
+    await advanceAndFlush(5000);
 
     await waitFor(() => {
       expect(getByText('Ready')).toBeTruthy();

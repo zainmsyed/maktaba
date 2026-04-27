@@ -14,6 +14,17 @@ export type BackendHighlight = {
   updated_at?: string;
 };
 
+export type BackendNote = {
+  id: string;
+  document_id: string;
+  highlight_id?: string | null;
+  content: string;
+  page_number?: number | null;
+  highlight?: BackendHighlight | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type LibraryHighlight = Highlight & {
   serverPersisted?: boolean;
 };
@@ -25,6 +36,15 @@ export type HighlightCreatePayload = {
   width: number;
   height: number;
   extracted_text?: string;
+};
+
+export type NoteCreatePayload = {
+  content: string;
+  highlight_id?: string | null;
+};
+
+export type NoteUpdatePayload = {
+  content: string;
 };
 
 function clamp01(value: number) {
@@ -123,6 +143,68 @@ export function createHighlightClient(apiUrl: string, documentId: string) {
       if (!resp.ok) {
         const txt = await resp.text();
         throw new Error(`Failed to delete highlight: ${resp.status} ${txt}`);
+      }
+    },
+  };
+}
+
+export function createNoteClient(apiUrl: string, documentId: string) {
+  const notesCollectionUrl = `${apiUrl}/api/documents/${documentId}/notes`;
+  const noteUrl = (noteId: string) => `${apiUrl}/api/notes/${noteId}`;
+
+  return {
+    async fetchNotes(): Promise<BackendNote[]> {
+      const resp = await fetch(notesCollectionUrl);
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Failed to load notes: ${resp.status} ${txt}`);
+      }
+      const payload = await resp.json();
+      return (payload.notes || []) as BackendNote[];
+    },
+
+    async createNote(payload: NoteCreatePayload): Promise<BackendNote> {
+      const resp = await fetch(notesCollectionUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          content: payload.content,
+          highlight_id: payload.highlight_id ?? null,
+        }),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Failed to create note: ${resp.status} ${txt}`);
+      }
+
+      const json = await resp.json();
+      return json.note as BackendNote;
+    },
+
+    async updateNote(noteId: string, payload: NoteUpdatePayload): Promise<BackendNote> {
+      const resp = await fetch(noteUrl(noteId), {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          content: payload.content,
+        }),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Failed to update note: ${resp.status} ${txt}`);
+      }
+
+      const json = await resp.json();
+      return json.note as BackendNote;
+    },
+
+    async deleteNote(noteId: string): Promise<void> {
+      const resp = await fetch(noteUrl(noteId), { method: 'DELETE' });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Failed to delete note: ${resp.status} ${txt}`);
       }
     },
   };

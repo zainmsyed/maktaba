@@ -13,7 +13,6 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 from sqlalchemy import delete as sa_delete, select
 from pydantic import BaseModel
-from pathlib import Path
 
 from app.db import get_session, initialize_database
 from app.uploads import create_document_upload
@@ -52,6 +51,34 @@ if CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+# Shared response sanitizers used by endpoints to avoid leaking internal file paths
+# in the public JSON payloads. Defined at module scope to avoid duplication.
+def _sanitize_document(doc_obj: object) -> dict[str, object]:
+    # Accept either a SQLModel instance or a mapping returned by lower-level
+    # code; produce a shallow JSON-serializable dict with internal paths
+    # removed.
+    try:
+        doc = doc_obj.model_dump(mode="json")
+    except Exception:
+        doc = dict(doc_obj)
+    doc.pop("file_path", None)
+    doc.pop("cover_path", None)
+    return doc
+
+
+def _sanitize_job(job_obj: object) -> dict[str, object]:
+    try:
+        j = job_obj.model_dump(mode="json")
+    except Exception:
+        j = dict(job_obj)
+    payload = j.get("payload")
+    if isinstance(payload, dict):
+        payload = payload.copy()
+        payload.pop("file_path", None)
+        j["payload"] = payload
+    return j
 
 
 @app.get("/")
@@ -123,30 +150,6 @@ async def upload_document(
         status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
     )
 
-    def _sanitize_document(doc_obj: object) -> dict[str, object]:
-        # Accept either a SQLModel instance or a mapping returned by lower-level
-        # code; produce a shallow JSON-serializable dict with internal paths
-        # removed.
-        try:
-            doc = doc_obj.model_dump(mode="json")
-        except Exception:
-            doc = dict(doc_obj)
-        doc.pop("file_path", None)
-        doc.pop("cover_path", None)
-        return doc
-
-    def _sanitize_job(job_obj: object) -> dict[str, object]:
-        try:
-            j = job_obj.model_dump(mode="json")
-        except Exception:
-            j = dict(job_obj)
-        payload = j.get("payload")
-        if isinstance(payload, dict):
-            payload = payload.copy()
-            payload.pop("file_path", None)
-            j["payload"] = payload
-        return j
-
     return {
         "created": result.created,
         "document": _sanitize_document(result.document),
@@ -177,27 +180,6 @@ def list_documents(session: Session = Depends(get_session)) -> dict[str, object]
         for j in jobs:
             jobs_by_doc[j.document_id].append(j)
 
-    def _sanitize_document(doc_obj: object) -> dict[str, object]:
-        try:
-            doc = doc_obj.model_dump(mode="json")
-        except Exception:
-            doc = dict(doc_obj)
-        doc.pop("file_path", None)
-        doc.pop("cover_path", None)
-        return doc
-
-    def _sanitize_job(job_obj: object) -> dict[str, object]:
-        try:
-            j = job_obj.model_dump(mode="json")
-        except Exception:
-            j = dict(job_obj)
-        payload = j.get("payload")
-        if isinstance(payload, dict):
-            payload = payload.copy()
-            payload.pop("file_path", None)
-            j["payload"] = payload
-        return j
-
     for doc in docs:
         result.append({
             "document": _sanitize_document(doc),
@@ -213,6 +195,29 @@ class HighlightCreate(BaseModel):
     width: float
     height: float
     color: str | None = None
+
+
+class NoteCreate(BaseModel):
+    content: str = ""
+    highlight_id: UUID | None = None
+
+
+class NoteUpdate(BaseModel):
+    content: str
+
+
+def serialize_highlight(highlight: Highlight) -> dict[str, object]:
+    payload = highlight.model_dump(mode="json")
+    payload.pop("fts", None)
+    return payload
+
+
+def serialize_note(note: Note, highlight: Highlight | None = None) -> dict[str, object]:
+    payload = note.model_dump(mode="json")
+    payload.pop("fts", None)
+    payload["page_number"] = highlight.page_number if highlight is not None else None
+    payload["highlight"] = serialize_highlight(highlight) if highlight is not None else None
+    return payload
 
 
 @app.post("/api/documents/{document_id}/highlights")
@@ -286,6 +291,109 @@ def list_highlights(document_id: UUID, session: Session = Depends(get_session)) 
         obj.pop("fts", None)
         result.append(obj)
     return {"highlights": result}
+
+
+@app.get("/api/documents/{document_id}/notes")
+def list_notes(document_id: UUID, session: Session = Depends(get_session)) -> dict[str, object]:
+    document = session.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    notes = session.exec(
+        select(Note).where(Note.document_id == document_id).order_by(Note.created_at, Note.id),
+    ).scalars().all()
+    highlight_ids = [note.highlight_id for note in notes if note.highlight_id is not None]
+    highlights_by_id: dict[UUID, Highlight] = {}
+    if highlight_ids:
+        highlights = session.exec(
+            select(Highlight).where(
+                Highlight.document_id == document_id,
+                Highlight.id.in_(highlight_ids),
+            ),
+        ).scalars().all()
+        highlights_by_id = {highlight.id: highlight for highlight in highlights}
+
+    result = [serialize_note(note, highlights_by_id.get(note.highlight_id)) for note in notes]
+    result.sort(
+        key=lambda item: (
+            item["page_number"] is None,
+            item["page_number"] if item["page_number"] is not None else 0,
+            item["updated_at"] or item["created_at"] or "",
+            item["id"],
+        ),
+    )
+    return {"notes": result}
+
+
+@app.post("/api/documents/{document_id}/notes")
+def create_note(
+    response: Response,
+    document_id: UUID,
+    payload: NoteCreate = Body(...),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    document = session.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    highlight: Highlight | None = None
+    if payload.highlight_id is not None:
+        highlight = session.exec(
+            select(Highlight).where(
+                Highlight.id == payload.highlight_id,
+                Highlight.document_id == document_id,
+            ),
+        ).scalars().first()
+        if highlight is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Highlight not found for document")
+
+    note = Note(
+        document_id=document_id,
+        highlight_id=payload.highlight_id,
+        content=payload.content,
+    )
+    session.add(note)
+    session.commit()
+    session.refresh(note)
+    response.status_code = status.HTTP_201_CREATED
+    return {"note": serialize_note(note, highlight)}
+
+
+@app.patch("/api/notes/{note_id}")
+def update_note(
+    note_id: UUID,
+    payload: NoteUpdate = Body(...),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    note = session.get(Note, note_id)
+    if note is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+
+    note.content = payload.content
+    session.add(note)
+    session.commit()
+    session.refresh(note)
+
+    highlight: Highlight | None = None
+    if note.highlight_id is not None:
+        highlight = session.get(Highlight, note.highlight_id)
+        if highlight is not None and highlight.document_id != note.document_id:
+            highlight = None
+
+    return {"note": serialize_note(note, highlight)}
+
+
+@app.delete("/api/notes/{note_id}")
+def delete_note(
+    note_id: UUID,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    note = session.get(Note, note_id)
+    if note is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    session.delete(note)
+    session.commit()
+    return {"deleted": True}
 
 
 @app.delete("/api/highlights/{highlight_id}")

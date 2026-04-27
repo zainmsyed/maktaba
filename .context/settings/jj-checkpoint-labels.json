@@ -1,6 +1,7 @@
 {
   "labels": {
     "18111688": "getting this when i go to api/documents\n\n{\"detail\":\"Method Not Allowed\"}",
+    "48287458": "4.BmKiGx4Z.js:13 Editing highlight 80ac7d54-75b4-4903-9926-0197d05d401e with  {c",
     "75271933": "so i can see the highllights but when i first load the pdf the highlifghts are a",
     "80201091": "You're absolutely not the first. This is a known nightmare. PDF.js text layer + ",
     "e8d48ce5": "Complete the Vazir bootstrap context drafting using the currently selected Pi mo",
@@ -134,6 +135,27 @@
     "37772a66": "ok so dont complete the story please put it back to in progress. only complete t",
     "3177d265": "please mark the issue \"completed\" i think we have solved it",
     "e1c7d8a7": "you didnt complete is in the story . please mark that completed",
-    "5afdef62": "when i hit refresh i get this when i have a pdf open\n\n435fd849-9d6f-4e20-a13c-52"
+    "5afdef62": "when i hit refresh i get this when i have a pdf open\n\n435fd849-9d6f-4e20-a13c-52",
+    "83f25167": "yes lets do that",
+    "db2ac7be": "Implement the in-progress story in .context/stories/story-008.md.\n\nYour job:\n1. ",
+    "e150b20d": "how do i visually check thi",
+    "3b6e1e72": "can you restart the docker container pelase",
+    "4821472c": "yers",
+    "02d9fe56": "restart all",
+    "cb872dcb": "{\"documents\":[{\"document\":{\"file_hash\":\"cbb5f2b3ba8e144b0560fb5a08eaa42694b9f1f3",
+    "77efd844": "yes",
+    "3862fdfd": ":3000/favicon.ico:1  GET http://localhost:3000/favicon.ico 404 (Not Found)\n4.BmK",
+    "b4a59e84": "4.BmKiGx4Z.js:13 Editing highlight 80ac7d54-75b4-4903-9926-0197d05d401e with  {c",
+    "1e5c7fa2": "whenis the visul polish for eveything?",
+    "071811e7": "which story is it",
+    "2440f285": "do you think its a good idea to get the ui right at this point? before we go dow",
+    "7402247c": "yes lets create story 009\n\n/home/zain/Documents/coding/maktaba/.context/intake/r",
+    "5c07585f": "please use the vazir template to create the story",
+    "f75ab8f7": "please use the vazir template to create the story",
+    "93fd4315": "please use the vazir template to create the story",
+    "3b8499a9": "Run a code review and write the results to .context/reviews/review-20260427-2018",
+    "05da07f4": "please restart the docker container so i can check the fixes",
+    "444c42ac": "favicon.ico:1  GET http://localhost:3000/favicon.ico 404 (Not Found)\nThe resourc",
+    "d29afa74": "please use jj to restore the most recent work. there were 22 uncommitted files i"
   }
 }

@@ -435,6 +435,82 @@ class DocumentUploadTests(unittest.TestCase):
             self.assertIsNone(session.get(Highlight, highlight_id))
             self.assertIsNone(session.get(Note, note_id))
 
+    def test_note_creation_listing_and_update_for_highlight_and_document_notes(self) -> None:
+        pdf_bytes = self._build_pdf_bytes(
+            title="Notes PDF",
+            author="Notes Test",
+            creation_date="D:20240424010203Z",
+        )
+
+        response = self.client.post(
+            "/api/documents",
+            files={"file": ("notes.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(response.status_code, 201)
+        document_id = UUID(response.json()["document"]["id"])
+
+        with self.db_module.Session(self.db_module.engine) as session:
+            highlight = Highlight(
+                document_id=document_id,
+                format="pdf",
+                page_number=2,
+                x=0.2,
+                y=0.3,
+                width=0.4,
+                height=0.1,
+                extracted_text="Relevant passage",
+                color="yellow",
+            )
+            session.add(highlight)
+            session.commit()
+            session.refresh(highlight)
+            highlight_id = highlight.id
+
+        attached_resp = self.client.post(
+            f"/api/documents/{document_id}/notes",
+            json={
+                "content": "Highlight note",
+                "highlight_id": str(highlight_id),
+            },
+        )
+        self.assertEqual(attached_resp.status_code, 201)
+        attached_note = attached_resp.json()["note"]
+        self.assertEqual(attached_note["content"], "Highlight note")
+        self.assertEqual(attached_note["highlight_id"], str(highlight_id))
+        self.assertEqual(attached_note["page_number"], 2)
+        self.assertEqual(attached_note["highlight"]["page_number"], 2)
+        self.assertEqual(attached_note["highlight"]["extracted_text"], "Relevant passage")
+
+        document_resp = self.client.post(
+            f"/api/documents/{document_id}/notes",
+            json={"content": "Document note"},
+        )
+        self.assertEqual(document_resp.status_code, 201)
+        document_note = document_resp.json()["note"]
+        self.assertIsNone(document_note["highlight_id"])
+        self.assertIsNone(document_note["page_number"])
+        self.assertIsNone(document_note["highlight"])
+
+        list_resp = self.client.get(f"/api/documents/{document_id}/notes")
+        self.assertEqual(list_resp.status_code, 200)
+        notes = list_resp.json()["notes"]
+        self.assertEqual(len(notes), 2)
+        notes_by_content = {note["content"]: note for note in notes}
+        self.assertEqual(notes_by_content["Highlight note"]["page_number"], 2)
+        self.assertIsNone(notes_by_content["Document note"]["page_number"])
+
+        update_resp = self.client.patch(
+            f"/api/notes/{attached_note['id']}",
+            json={"content": "Updated highlight note"},
+        )
+        self.assertEqual(update_resp.status_code, 200)
+        self.assertEqual(update_resp.json()["note"]["content"], "Updated highlight note")
+
+        list_resp2 = self.client.get(f"/api/documents/{document_id}/notes")
+        self.assertEqual(list_resp2.status_code, 200)
+        notes2 = {note["id"]: note for note in list_resp2.json()["notes"]}
+        self.assertEqual(notes2[attached_note["id"]]["content"], "Updated highlight note")
+
     def test_stream_document_pdf_returns_pdf_bytes(self) -> None:
         pdf_bytes = self._build_pdf_bytes(
             title="Streaming PDF",
@@ -454,3 +530,36 @@ class DocumentUploadTests(unittest.TestCase):
         self.assertEqual(stream_resp.headers.get("content-type", "").split(";")[0], "application/pdf")
         self.assertIn("inline", stream_resp.headers.get("content-disposition", ""))
         self.assertEqual(stream_resp.content, pdf_bytes)
+
+    def test_delete_note_removes_note(self) -> None:
+        # Create a document and add a standalone note, then delete it and verify removal.
+        pdf_bytes = self._build_pdf_bytes(
+            title="Delete Note PDF",
+            author="Notes Delete Test",
+            creation_date="D:20240424010203Z",
+        )
+
+        response = self.client.post(
+            "/api/documents",
+            files={"file": ("notes-delete.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(response.status_code, 201)
+        document_id = UUID(response.json()["document"]["id"]) 
+
+        # Create a standalone note via API
+        create_resp = self.client.post(
+            f"/api/documents/{document_id}/notes",
+            json={"content": "To be deleted"},
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        note = create_resp.json()["note"]
+        note_id = note["id"]
+
+        # Delete the note
+        delete_resp = self.client.delete(f"/api/notes/{note_id}")
+        self.assertEqual(delete_resp.status_code, 200)
+        self.assertTrue(delete_resp.json().get("deleted", False))
+
+        # Verify it's gone from the DB
+        with self.db_module.Session(self.db_module.engine) as session:
+            self.assertIsNone(session.get(Note, UUID(note_id)))
