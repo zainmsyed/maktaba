@@ -1,6 +1,7 @@
 {
   "labels": {
     "18111688": "getting this when i go to api/documents\n\n{\"detail\":\"Method Not Allowed\"}",
+    "80201091": "You're absolutely not the first. This is a known nightmare. PDF.js text layer + ",
     "e8d48ce5": "Complete the Vazir bootstrap context drafting using the currently selected Pi mo",
     "8bd72900": "The user wants to plan their project.\nNo story files are pre-seeded in .context/",
     "b149e3a1": "MVP/V1 for now",
@@ -86,6 +87,31 @@
     "610d7241": "The user reported an issue via /fix: \"unable to make a selection and not seeing ",
     "0a5524b9": "there is no sidebarbas well as i cant selrct anything still",
     "c922f2f4": "dont see a sidebar and pdfs just say processing",
-    "0dc5e5fa": "i cant hightlight bc everything is processing. the sidebar is there now"
+    "0dc5e5fa": "i cant hightlight bc everything is processing. the sidebar is there now",
+    "53e86358": "ok they go to ready now but still cant make a selection",
+    "62c58930": "nothing. i hard refreshed. no console error. on brave desktop",
+    "2920552a": "favicon.ico:1  GET http://localhost:3000/favicon.ico 404 (Not Found)\n4.B6nU7dsP.",
+    "7502eafe": "issue isnt fixed. cant highlight anything",
+    "dc7fcbd6": "im seeing nithing in the logs do we need to rebuild all of this again story 006 ",
+    "5478c179": ":3000/favicon.ico:1  GET http://localhost:3000/favicon.ico 404 (Not Found)\nThe r",
+    "ef6ec362": "ok now the pdfs are there but still cant select and nothing in the console unfor",
+    "1ffe27aa": "yes",
+    "0335c4c4": "i entered the first code block and nothing happend. i hard refresed the browser ",
+    "da0c1ad1": "favicon.ico:1  GET http://localhost:3000/favicon.ico 404 (Not Found)\n435fd849-9d",
+    "1cbb9476": "favicon.ico:1  GET http://localhost:3000/favicon.ico 404 (Not Found)\n435fd849-9d",
+    "c5082bf5": "favicon.ico:1  GET http://localhost:3000/favicon.ico 404 (Not Found)\n435fd849-9d",
+    "d0f0c533": "what file are associated with this",
+    "7c2b2656": "[what file is the pdf vewer componet",
+    "bd219c8e": "Where are highlights stored/persisted?",
+    "a4a6a7ed": "Okay, so the text layer itself is the blocker — highlights storage is already wi",
+    "322eb866": "Your own analysis is solid — you've already diagnosed it correctly. Let me be di",
+    "51ea38cb": "The console output is clear. The host element exists but `innerHTML` is empty — ",
+    "30bd17c0": "Great progress — spans are rendering now. Two remaining issues:\n\n1. **`.textLaye",
+    "84efee6c": "Spans are receiving the clicks directly — so nothing is blocking the mouse event",
+    "1f972d03": "Okay, let's stop guessing with console snippets and just replace the broken brow",
+    "b1cbcbc0": "Okay I can see the full picture now. Your architecture is actually solid — the m",
+    "4a25efd8": "full swap",
+    "0969f2ce": "ok this is already much better but we need to tweak things a bit. it not showing",
+    "beb8b766": "435fd849-9d6f-4e20-a13c-52e44a582d40:1  GET http://localhost:3000/library/435fd8"
   }
 }
