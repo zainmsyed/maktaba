@@ -58,7 +58,7 @@ Stories: 018, 019, 020, 021
 | 004 | Implement library UI and upload flow | Not started | 003 |
 | 005 | Deliver the PDF reader shell | Not started | 003, 004 |
 | 006 | Add PDF text extraction and OCR fallback | Not started | 002, 003, 005 |
-| 007 | Persist and render PDF highlights | Not started | 005, 006 |
+| 007 | Persist and render PDF highlights | Completed | 005, 006 |
 | 008 | Add inline notes, autosave, and notes sidebar | Not started | 007 |
 | 009 | Surface background job status and retries | Not started | 003, 006, 008 |
 | 010 | Add full-text search across notes and highlights | Not started | 008 |
