@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { onMount, tick } from 'svelte';
   import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
   import {
@@ -686,44 +687,50 @@
 
       <div class="p-4">
         <div bind:this={pdfViewerHostEl} class="reader-pdf-shell relative h-[72vh] overflow-hidden rounded-2xl bg-slate-900/60">
-          {#if error}
-            <div class="flex h-full items-center justify-center p-6">
-              <div class="max-w-lg rounded-2xl border border-rose-700 bg-rose-950/40 p-6 text-sm text-rose-100">
-                <p class="font-semibold">Unable to load the reader</p>
-                <p class="mt-2">{error}</p>
+          {#if browser}
+            {#if error}
+              <div class="flex h-full items-center justify-center p-6">
+                <div class="max-w-lg rounded-2xl border border-rose-700 bg-rose-950/40 p-6 text-sm text-rose-100">
+                  <p class="font-semibold">Unable to load the reader</p>
+                  <p class="mt-2">{error}</p>
+                </div>
               </div>
-            </div>
-          {:else}
-            <PdfLoader document={data.fileUrl} onError={handlePdfLoadError} workerSrc={PDF_WORKER_SRC}>
-              {#snippet beforeLoad(progress)}
-                <div class="flex h-full items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/70 px-6 py-5 text-sm text-slate-300">
-                  Loading PDF… {progress.total ? Math.floor((progress.loaded / progress.total) * 100) : 0}%
-                </div>
-              {/snippet}
-
-              {#snippet errorMessage(loadError)}
-                <div class="flex h-full items-center justify-center p-6">
-                  <div class="max-w-lg rounded-2xl border border-rose-700 bg-rose-950/40 p-6 text-sm text-rose-100">
-                    <p class="font-semibold">Unable to load the reader</p>
-                    <p class="mt-2">{loadError.message}</p>
+            {:else}
+              <PdfLoader document={data.fileUrl} onError={handlePdfLoadError} workerSrc={PDF_WORKER_SRC}>
+                {#snippet beforeLoad(progress)}
+                  <div class="flex h-full items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/70 px-6 py-5 text-sm text-slate-300">
+                    Loading PDF… {progress.total ? Math.floor((progress.loaded / progress.total) * 100) : 0}%
                   </div>
-                </div>
-              {/snippet}
+                {/snippet}
 
-              {#snippet pdfHighlighterWrapper(pdfDocument)}
-                {@const _ready = syncPdfDocument(pdfDocument)}
-                <PdfHighlighter
-                  pdfDocument={pdfDocument}
-                  {highlightsStore}
-                  bind:pdfHighlighterUtils={pdfHighlighterUtils}
-                  onContextMenu={preventContextMenu}
-                  highlightPopup={highlightPopup as any}
-                  onHighlightsRendered={handleHighlighterRendered}
-                  scaleOnResize={true}
-                  style="width: 100%; height: 100%; background: rgb(15 23 42);"
-                />
-              {/snippet}
-            </PdfLoader>
+                {#snippet errorMessage(loadError)}
+                  <div class="flex h-full items-center justify-center p-6">
+                    <div class="max-w-lg rounded-2xl border border-rose-700 bg-rose-950/40 p-6 text-sm text-rose-100">
+                      <p class="font-semibold">Unable to load the reader</p>
+                      <p class="mt-2">{loadError.message}</p>
+                    </div>
+                  </div>
+                {/snippet}
+
+                {#snippet pdfHighlighterWrapper(pdfDocument)}
+                  {@const _ready = syncPdfDocument(pdfDocument)}
+                  <PdfHighlighter
+                    pdfDocument={pdfDocument}
+                    {highlightsStore}
+                    bind:pdfHighlighterUtils={pdfHighlighterUtils}
+                    onContextMenu={preventContextMenu}
+                    highlightPopup={highlightPopup as any}
+                    onHighlightsRendered={handleHighlighterRendered}
+                    scaleOnResize={true}
+                    style="width: 100%; height: 100%; background: rgb(15 23 42);"
+                  />
+                {/snippet}
+              </PdfLoader>
+            {/if}
+          {:else}
+            <div class="flex h-full items-center justify-center p-6 text-sm text-slate-400">
+              Loading reader…
+            </div>
           {/if}
         </div>
       </div>
