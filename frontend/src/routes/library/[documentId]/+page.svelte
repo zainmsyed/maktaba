@@ -7,7 +7,6 @@
     HighlightsModel,
     type Highlight,
     type PdfHighlighterUtils,
-    type ViewportHighlight,
   } from 'svelte-pdf-highlighter';
 
   export let data: {
@@ -47,6 +46,13 @@
     serverPersisted?: boolean;
   };
 
+  type PopupHighlightLike = {
+    id?: string;
+    comment?: string | null;
+    extracted_text?: string | null;
+    content?: { text?: string };
+  };
+
   const MIN_ZOOM = 0.5;
   const MAX_ZOOM = 3;
   const ZOOM_STEP = 0.1;
@@ -75,6 +81,19 @@
   let rebuildingHighlightsStore = false;
   let pendingHighlightIds = new Set<string>();
   let pendingDeleteIds = new Set<string>();
+
+  function promptDeleteHighlight(highlight: PopupHighlightLike) {
+    if (!highlight.id) return;
+    const text =
+      highlight.extracted_text?.trim() ||
+      highlight.comment?.trim() ||
+      highlight.content?.text?.trim() ||
+      '<no text>';
+    const ok = confirm(`Highlight text:\n\n${text}\n\nDelete this highlight?`);
+    if (ok) {
+      void deleteHighlightById(highlight.id);
+    }
+  }
 
   let pdfHighlighterUtils: Partial<PdfHighlighterUtils> = {
     selectedTool: 'highlight_pen',
@@ -307,21 +326,6 @@
     }
   }
 
-  function onHighlightClick(highlight: BackendHighlight) {
-    const ok = confirm(`Highlight text:\n\n${highlight.extracted_text || '<no text>'}\n\nDelete this highlight?`);
-    if (ok) {
-      void deleteHighlightById(highlight.id);
-    }
-  }
-
-  function handleLibraryHighlightClick(event: MouseEvent, highlight: ViewportHighlight<LibraryHighlight>) {
-    event.preventDefault();
-    event.stopPropagation();
-    const backendHighlight = highlights.find((entry) => entry.id === highlight.id);
-    if (!backendHighlight) return;
-    onHighlightClick(backendHighlight);
-  }
-
   function preventContextMenu(event: MouseEvent) {
     event.preventDefault();
   }
@@ -530,6 +534,41 @@
   });
 </script>
 
+{#snippet highlightPopup(highlight: PopupHighlightLike, setPinned: (flag: boolean) => void)}
+  <div class="Highlight__popup" style="display: flex; align-items: center; gap: 0.25rem;">
+    {#if highlight.comment || highlight.content?.text || highlight.extracted_text}
+      <div style="margin: 5px; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        {highlight.comment || highlight.content?.text || highlight.extracted_text}
+      </div>
+    {:else}
+      <div style="margin: 5px; white-space: nowrap;">Comment has no Text</div>
+    {/if}
+
+    <button
+      type="button"
+      class="TipButton"
+      aria-label="Edit highlight"
+      on:click={() => setPinned(true)}
+    >
+      <div style="height: 1.1rem; width: 1.1rem;" class="icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+      </div>
+    </button>
+
+    <button
+      type="button"
+      class="TipButton"
+      style="color: rgb(220 38 38);"
+      aria-label="Delete highlight"
+      on:click={() => promptDeleteHighlight(highlight)}
+    >
+      <div style="height: 1.1rem; width: 1.1rem;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </div>
+    </button>
+  </div>
+{/snippet}
+
 <svelte:head>
   <title>{documentTitle} — Maktaba Reader</title>
 </svelte:head>
@@ -679,7 +718,7 @@
                   type="button"
                   class="shrink-0 text-slate-500 transition hover:text-rose-400"
                   aria-label="Delete highlight"
-                  on:click={() => onHighlightClick(h)}
+                  on:click={() => promptDeleteHighlight(h)}
                 >✕</button>
               </li>
             {/each}
@@ -779,7 +818,7 @@
                   {highlightsStore}
                   bind:pdfHighlighterUtils={pdfHighlighterUtils}
                   onContextMenu={preventContextMenu}
-                  onHighlightClick={handleLibraryHighlightClick}
+                  highlightPopup={highlightPopup as any}
                   onHighlightsRendered={handleHighlighterRendered}
                   scaleOnResize={true}
                   style="width: 100%; height: 100%; background: rgb(15 23 42);"

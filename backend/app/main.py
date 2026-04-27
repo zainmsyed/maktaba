@@ -11,13 +11,13 @@ from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete, select
 from pydantic import BaseModel
 from pathlib import Path
 
 from app.db import get_session, initialize_database
 from app.uploads import create_document_upload
-from app.models import Document, Job, Highlight
+from app.models import Document, Job, Highlight, Note
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data")).resolve()
 CORS_ORIGINS = [
@@ -293,6 +293,10 @@ def delete_highlight(highlight_id: UUID, session: Session = Depends(get_session)
     h = session.get(Highlight, highlight_id)
     if h is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Highlight not found")
+
+    # Delete dependent notes explicitly so highlight deletion works even if an
+    # older database was created before the ON DELETE CASCADE constraint existed.
+    session.execute(sa_delete(Note).where(Note.highlight_id == highlight_id))
     session.delete(h)
     session.commit()
     return {"deleted": True}

@@ -1,6 +1,7 @@
 {
   "labels": {
     "18111688": "getting this when i go to api/documents\n\n{\"detail\":\"Method Not Allowed\"}",
+    "75271933": "so i can see the highllights but when i first load the pdf the highlifghts are a",
     "80201091": "You're absolutely not the first. This is a known nightmare. PDF.js text layer + ",
     "e8d48ce5": "Complete the Vazir bootstrap context drafting using the currently selected Pi mo",
     "8bd72900": "The user wants to plan their project.\nNo story files are pre-seeded in .context/",
@@ -112,6 +113,16 @@
     "b1cbcbc0": "Okay I can see the full picture now. Your architecture is actually solid — the m",
     "4a25efd8": "full swap",
     "0969f2ce": "ok this is already much better but we need to tweak things a bit. it not showing",
-    "beb8b766": "435fd849-9d6f-4e20-a13c-52e44a582d40:1  GET http://localhost:3000/library/435fd8"
+    "beb8b766": "435fd849-9d6f-4e20-a13c-52e44a582d40:1  GET http://localhost:3000/library/435fd8",
+    "7f5dea1e": "commit and push this",
+    "7db1c22c": "so i can see the highllights but when i first load the pdf the highlifghts are a",
+    "246d5ee5": "so i can see the highllights but when i first load the pdf the highlifghts are a",
+    "461cad8d": "commit and push",
+    "ba02b2ea": "should we have a delete button next to the notes icon when one clicks a highligh",
+    "c159d603": "i like red trash icon. everythng looks good",
+    "76e84bdd": "literally dont see any changes",
+    "57bd236f": "ok i see the delete icon but when i hit it nothing really happens. ive pasted th",
+    "5da8ad7d": "favicon.ico:1  GET http://localhost:3000/favicon.ico 404 (Not Found)\n4.eg3CHzmy.",
+    "bcd80ae0": "favicon.ico:1  GET http://localhost:3000/favicon.ico 404 (Not Found)\n4.eg3CHzmy."
   }
 }

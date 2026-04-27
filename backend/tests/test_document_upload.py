@@ -10,7 +10,7 @@ import unittest
 import zipfile
 from pathlib import Path
 from unittest import mock
-from uuid import uuid4
+from uuid import UUID, uuid4
 from datetime import datetime, timezone
 
 from fastapi import UploadFile
@@ -21,7 +21,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
-from app.models import Document, Job
+from app.models import Document, Highlight, Job, Note
 from app.uploads import create_document_upload
 
 
@@ -384,6 +384,56 @@ class DocumentUploadTests(unittest.TestCase):
         self.assertEqual(list_resp2.status_code, 200)
         docs2 = list_resp2.json().get("documents", [])
         self.assertEqual(len(docs2), 0)
+
+    def test_delete_highlight_removes_linked_notes(self) -> None:
+        pdf_bytes = self._build_pdf_bytes(
+            title="Delete Highlight PDF",
+            author="Delete Test",
+            creation_date="D:20240424010203Z",
+        )
+
+        response = self.client.post(
+            "/api/documents",
+            files={"file": ("delete.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(response.status_code, 201)
+        document_id = UUID(response.json()["document"]["id"])
+
+        with self.db_module.Session(self.db_module.engine) as session:
+            highlight = Highlight(
+                document_id=document_id,
+                format="pdf",
+                page_number=1,
+                x=0.1,
+                y=0.2,
+                width=0.3,
+                height=0.1,
+                extracted_text="Delete me",
+                color="yellow",
+            )
+            session.add(highlight)
+            session.commit()
+            session.refresh(highlight)
+
+            note = Note(
+                document_id=document_id,
+                highlight_id=highlight.id,
+                content="linked note",
+            )
+            session.add(note)
+            session.commit()
+            session.refresh(note)
+
+            note_id = note.id
+            highlight_id = highlight.id
+
+        delete_resp = self.client.delete(f"/api/highlights/{highlight_id}")
+        self.assertEqual(delete_resp.status_code, 200)
+        self.assertTrue(delete_resp.json()["deleted"])
+
+        with self.db_module.Session(self.db_module.engine) as session:
+            self.assertIsNone(session.get(Highlight, highlight_id))
+            self.assertIsNone(session.get(Note, note_id))
 
     def test_stream_document_pdf_returns_pdf_bytes(self) -> None:
         pdf_bytes = self._build_pdf_bytes(
