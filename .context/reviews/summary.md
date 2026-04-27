@@ -1,6 +1,6 @@
 # Review Summary
 
-**Last updated:** 2026-04-27T13:52:03Z
+**Last updated:** 2026-04-27T14:17:31Z
 
 ## Findings
 - When adding schema/bootstrap logic, include at least one automated Postgres smoke test for tables, extensions, and indexes. | count: 2 | status: promoted | sources: review-20260424-204758.md, review-20260424-205443.md

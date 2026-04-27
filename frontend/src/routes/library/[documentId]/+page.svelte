@@ -5,9 +5,15 @@
     PdfLoader,
     PdfHighlighter,
     HighlightsModel,
-    type Highlight,
     type PdfHighlighterUtils,
   } from 'svelte-pdf-highlighter';
+  import {
+    backendToLibraryHighlight,
+    buildCreatePayload,
+    createHighlightClient,
+    type BackendHighlight,
+    type LibraryHighlight,
+  } from './highlight-api';
 
   export let data: {
     apiUrl: string;
@@ -27,24 +33,6 @@
   type ZoomMode = 'fit-width' | 'fit-page' | 'custom';
   type HighlightMode = 'text' | 'draw';
   type JobStatus = 'ready' | 'processing' | 'failed';
-
-  type BackendHighlight = {
-    id: string;
-    format?: string | null;
-    color?: string | null;
-    extracted_text?: string | null;
-    page_number: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    created_at?: string;
-    updated_at?: string;
-  };
-
-  type LibraryHighlight = Highlight & {
-    serverPersisted?: boolean;
-  };
 
   type PopupHighlightLike = {
     id?: string;
@@ -81,6 +69,7 @@
   let rebuildingHighlightsStore = false;
   let pendingHighlightIds = new Set<string>();
   let pendingDeleteIds = new Set<string>();
+  const highlightClient = createHighlightClient(data.apiUrl, data.document.id);
 
   function promptDeleteHighlight(highlight: PopupHighlightLike) {
     if (!highlight.id) return;
@@ -120,10 +109,6 @@
   $: jobCountLabel = data.jobs.length === 1 ? '1 background job' : `${data.jobs.length} background jobs`;
   $: currentPageHighlights = highlights.filter((highlight) => highlight.page_number === currentPage);
 
-  function clamp01(value: number) {
-    return Math.min(1, Math.max(0, value));
-  }
-
   function clampZoom(value: number) {
     return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
   }
@@ -137,53 +122,6 @@
       return 'processing';
     }
     return 'ready';
-  }
-
-  function backendToLibraryHighlight(highlight: BackendHighlight): LibraryHighlight {
-    return {
-      id: highlight.id,
-      type: 'area',
-      content: highlight.extracted_text ? { text: highlight.extracted_text } : {},
-      position: {
-        boundingRect: {
-          x1: highlight.x,
-          y1: highlight.y,
-          x2: highlight.x + highlight.width,
-          y2: highlight.y + highlight.height,
-          width: 1,
-          height: 1,
-          pageNumber: highlight.page_number,
-        },
-        rects: [],
-      },
-      color_index: 0,
-      serverPersisted: true,
-    };
-  }
-
-  function buildCreatePayload(highlight: LibraryHighlight) {
-    const boundingRect = highlight.position?.boundingRect;
-    if (!boundingRect) return null;
-
-    const baseWidth = boundingRect.width || 1;
-    const baseHeight = boundingRect.height || 1;
-    const x1 = Math.min(boundingRect.x1, boundingRect.x2);
-    const y1 = Math.min(boundingRect.y1, boundingRect.y2);
-    const x2 = Math.max(boundingRect.x1, boundingRect.x2);
-    const y2 = Math.max(boundingRect.y1, boundingRect.y2);
-    const width = (x2 - x1) / baseWidth;
-    const height = (y2 - y1) / baseHeight;
-
-    if (width < 0.005 || height < 0.005) return null;
-
-    return {
-      page_number: boundingRect.pageNumber,
-      x: clamp01(x1 / baseWidth),
-      y: clamp01(y1 / baseHeight),
-      width: clamp01(width),
-      height: clamp01(height),
-      extracted_text: highlight.content?.text?.trim() ?? '',
-    };
   }
 
   // Merge backend records into the existing store without dropping local (unpersisted) highlights.
@@ -223,49 +161,11 @@
 
   async function loadHighlights() {
     try {
-      const resp = await fetch(`${data.apiUrl}/api/documents/${data.document.id}/highlights`);
-      if (!resp.ok) {
-        console.error('[highlight] Failed to load highlights', resp.status);
-        return;
-      }
-      const payload = await resp.json();
-      highlights = payload.highlights || [];
+      highlights = await highlightClient.fetchHighlights();
       syncHighlightsStore();
     } catch (e) {
       console.error('[highlight] Failed to load highlights', e);
     }
-  }
-
-  async function createHighlight(payload: {
-    page_number: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    extracted_text?: string;
-  }) {
-    const resp = await fetch(`${data.apiUrl}/api/documents/${data.document.id}/highlights`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        format: 'pdf',
-        color: 'yellow',
-        extracted_text: payload.extracted_text ?? '',
-        page_number: payload.page_number,
-        x: payload.x,
-        y: payload.y,
-        width: payload.width,
-        height: payload.height,
-      }),
-    });
-
-    if (!resp.ok) {
-      const txt = await resp.text();
-      throw new Error(`Failed to create highlight: ${resp.status} ${txt}`);
-    }
-
-    const json = await resp.json();
-    return json.highlight as BackendHighlight;
   }
 
   async function persistLibraryHighlight(highlight: LibraryHighlight) {
@@ -281,7 +181,7 @@
     statusMessage = `Saving highlight on page ${payload.page_number}…`;
 
     try {
-      const createdHighlight = await createHighlight(payload);
+      const createdHighlight = await highlightClient.createHighlight(payload);
       highlights = [...highlights, createdHighlight];
       if (highlightId) {
         highlightsStore.editHighlight(highlightId, {
@@ -306,8 +206,7 @@
   async function deleteHighlightById(id: string, options: { suppressAlert?: boolean } = {}) {
     pendingDeleteIds.add(id);
     try {
-      const resp = await fetch(`${data.apiUrl}/api/highlights/${id}`, { method: 'DELETE' });
-      if (!resp.ok) throw new Error(`Failed to delete: ${resp.status}`);
+      await highlightClient.deleteHighlight(id);
       highlights = highlights.filter((highlight) => highlight.id !== id);
       const storeHighlight = highlightsStore.getHighlightById(id) as LibraryHighlight | undefined;
       if (storeHighlight) {

@@ -1,7 +1,7 @@
 # Project — Plan
 
 **Created:** 2026-04-24  
-**Last updated:** 2026-04-24
+**Last updated:** 2026-04-27
 
 ---
 
@@ -23,7 +23,7 @@ Maktaba is a brand new single-user, self-hosted web app for reading PDFs and EPU
 
 ## Delivery strategy
 1. Establish the app skeleton, database, and upload pipeline.
-2. Ship the PDF reading and note-taking loop first.
+2. Ship the PDF reading and note-taking loop first, keeping highlight persistence and popup behavior in a small route-local helper module.
 3. Add retrieval foundations: full-text, embeddings, hybrid search.
 4. Add EPUB support and external highlight imports.
 5. Finish with polish, lifecycle flows, scanning, and backup/export.
@@ -34,7 +34,7 @@ Create the runnable app skeleton, database schema, storage model, upload flow, a
 Stories: 001, 002, 003, 004
 
 ### Feature 2: PDF reading and notes
-Build the PDF reader, extraction pipeline, persistent highlights, inline note editing, notes sidebar, and background processing UX.
+Build the PDF reader, extraction pipeline, persistent highlights, route-local highlight helpers, inline note editing, notes sidebar, and background processing UX.
 Stories: 005, 006, 007, 008, 009
 
 ### Feature 3: Retrieval
