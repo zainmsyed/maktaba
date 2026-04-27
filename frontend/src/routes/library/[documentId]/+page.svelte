@@ -166,9 +166,12 @@
     };
   }
 
+  // Merge backend records into the existing store without dropping local (unpersisted) highlights.
   function syncHighlightsStore(records: BackendHighlight[] = highlights) {
     rebuildingHighlightsStore = true;
-    (highlightsStore as any).highlights = records.map(backendToLibraryHighlight);
+    const backendLibs = (records || []).map(backendToLibraryHighlight);
+    const localPending = ((highlightsStore as any).highlights || []).filter((h: LibraryHighlight) => !h.serverPersisted);
+    (highlightsStore as any).highlights = [...backendLibs, ...localPending];
     rebuildingHighlightsStore = false;
   }
 
@@ -393,6 +396,7 @@
     return totalPages;
   }
 
+  let initialStoreSynced = false;
   function handleHighlighterRendered() {
     loading = false;
     error = null;
@@ -402,6 +406,11 @@
         initialZoomApplied = true;
         pdfHighlighterUtils.setCurrentScaleValue?.('page-width');
         zoomMode = 'fit-width';
+      }
+      // Only sync the persisted backend highlights into the store once the viewer is ready.
+      if (!initialStoreSynced) {
+        syncHighlightsStore();
+        initialStoreSynced = true;
       }
       updateCurrentPageFromScroll();
     });
