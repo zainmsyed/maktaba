@@ -1,9 +1,9 @@
 # Story 007: Persist and render PDF highlights
 
-**Status:** in-progress  
+**Status:** completed  
 **Created:** 2026-04-24  
 **Last accessed:** 2026-04-27  
-**Completed:** —
+**Completed:** 2026-04-27
 
 ---
 
@@ -45,9 +45,9 @@ Create a highlight in a PDF, refresh the page, and confirm the highlight is stil
 
 ### /fix — "unable to make a selection and not seeing any highlight interface"
 - **Reported:** 2026-04-26  
-- **Status:** pending  
+- **Status:** completed (review: review-20260427-091600.md, commit: 49d4fc8)  
 - **Agent note:** Replaced mouse events with pointer events + `setPointerCapture`. Sidebar now always visible (error moved inside PDF pane). Removed `|preventDefault` from pointerdown; added `user-select:none` to overlay instead. Added Highlights sidebar section with drag instructions and per-page list. Fixed layout breakpoint — sidebar 2-column grid is now unconditional (no `lg:` prefix). Fixed `deriveJobStatus` to only count `extract_text`/`ocr` jobs so stuck `generate_embedding` jobs no longer show "Processing" indefinitely.
-- **Solution:** Pending browser confirmation.
+- **Solution:** Fix verified in review and manual QA.
 
 - None blocking. Note: the frontend stores highlight geometry as normalized viewport coordinates (0..1) and the backend converts those to PDF points for text extraction using PyMuPDF. The page now delegates highlight load/create/delete work to `frontend/src/routes/library/[documentId]/highlight-api.ts`, so keep that helper and the viewer normalization semantics in sync if the PDF viewer implementation changes.
 
@@ -67,5 +67,5 @@ Verification steps performed:
 3. Confirmed extracted text is stored in the DB and returned by the API. Deleting a highlight removes it from the UI and DB.
 4. Added a direct unit test for `frontend/src/routes/library/[documentId]/highlight-api.ts` to verify backend mapping and normalized payload generation.
 
-Status: Implementation complete from a functionality perspective. Do not mark the story complete yet — leave final closeout to the usual review/acceptance step.
+Status: Completed. See .context/reviews/review-20260427-091600.md for verification and notes.
 
