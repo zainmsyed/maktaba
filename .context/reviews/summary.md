@@ -1,6 +1,6 @@
 # Review Summary
 
-**Last updated:** 2026-04-27T14:17:31Z
+**Last updated:** 2026-04-27T15:36:34Z
 
 ## Findings
 - When adding schema/bootstrap logic, include at least one automated Postgres smoke test for tables, extensions, and indexes. | count: 2 | status: promoted | sources: review-20260424-204758.md, review-20260424-205443.md
@@ -12,6 +12,7 @@
 - New background extraction/OCR flows should have automated coverage for both the happy path and failure rollback. | count: 1 | status: tracked | sources: review-20260425-191437.md | stories: story-006
 - Schema/bootstrap stories should include at least one automated database smoke test for required extensions, tables, and critical indexes. | count: 1 | status: tracked | sources: review-20260424-210450.md | stories: story-002
 - When a parent row owns child rows, encode the intended `ON DELETE` action in the database foreign key instead of relying on application cleanup. | count: 1 | status: tracked | sources: review-20260424-210450.md | stories: story-002
+- When adding a new persistence path, add a small route-local client with unit tests for mapping and payload generation. | count: 1 | status: tracked | sources: review-20260427-091600.md | stories: story-007
 - When adding a new service scaffold, include at least one smoke test and CI job to validate build-and-run. | count: 1 | status: tracked | sources: review-20260424-171509.md
 - When adding remembered rules, use the `/remember` workflow so the memory sync process remains authoritative. | count: 1 | status: tracked | sources: review-20260424-171509.md
 - When building frontend Docker images, commit and use a package-manager lockfile to ensure reproducible builds. | count: 1 | status: tracked | sources: review-20260424-171509.md
