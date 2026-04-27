@@ -66,6 +66,7 @@
   let pdfViewerHostEl: HTMLDivElement | null = null;
   let pdfScrollerEl: HTMLElement | null = null;
   let scrollFrame: number | null = null;
+  let highlightsRefreshFrame: number | null = null;
   let initialZoomApplied = false;
 
   let highlights: BackendHighlight[] = [];
@@ -396,7 +397,25 @@
     return totalPages;
   }
 
-  let initialStoreSynced = false;
+  function scheduleHighlightsRefresh() {
+    if (typeof window === 'undefined') {
+      syncHighlightsStore();
+      return;
+    }
+
+    if (highlightsRefreshFrame !== null) {
+      window.cancelAnimationFrame(highlightsRefreshFrame);
+    }
+
+    highlightsRefreshFrame = window.requestAnimationFrame(() => {
+      highlightsRefreshFrame = window.requestAnimationFrame(() => {
+        highlightsRefreshFrame = null;
+        syncHighlightsStore();
+        updateCurrentPageFromScroll();
+      });
+    });
+  }
+
   function handleHighlighterRendered() {
     loading = false;
     error = null;
@@ -407,12 +426,7 @@
         pdfHighlighterUtils.setCurrentScaleValue?.('page-width');
         zoomMode = 'fit-width';
       }
-      // Only sync the persisted backend highlights into the store once the viewer is ready.
-      if (!initialStoreSynced) {
-        syncHighlightsStore();
-        initialStoreSynced = true;
-      }
-      updateCurrentPageFromScroll();
+      scheduleHighlightsRefresh();
     });
   }
 
@@ -441,12 +455,14 @@
     zoomMode = 'fit-width';
     statusMessage = 'Fitting to page width';
     pdfHighlighterUtils.setCurrentScaleValue?.('page-width');
+    scheduleHighlightsRefresh();
   }
 
   function setFitPage() {
     zoomMode = 'fit-page';
     statusMessage = 'Fitting the full page';
     pdfHighlighterUtils.setCurrentScaleValue?.('page-fit');
+    scheduleHighlightsRefresh();
   }
 
   function applyCustomZoom(nextZoom: number) {
@@ -455,6 +471,7 @@
     currentScale = customZoom;
     statusMessage = `Zoom set to ${Math.round(customZoom * 100)}%`;
     pdfHighlighterUtils.setCurrentScaleValue?.(customZoom);
+    scheduleHighlightsRefresh();
   }
 
   function zoomIn() {
@@ -501,8 +518,13 @@
     return () => {
       unsubscribeHighlightsStore?.();
       disconnectPdfScroller();
-      if (typeof window !== 'undefined' && scrollFrame !== null) {
-        window.cancelAnimationFrame(scrollFrame);
+      if (typeof window !== 'undefined') {
+        if (scrollFrame !== null) {
+          window.cancelAnimationFrame(scrollFrame);
+        }
+        if (highlightsRefreshFrame !== null) {
+          window.cancelAnimationFrame(highlightsRefreshFrame);
+        }
       }
     };
   });
