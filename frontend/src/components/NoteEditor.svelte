@@ -18,6 +18,7 @@
   let savedClearTimer: number | null = null;
   let textareaEl: HTMLTextAreaElement | null = null;
 
+  // expose focus() for tests / callers
   export function focus() {
     textareaEl?.focus();
     textareaEl?.setSelectionRange?.(textareaEl.value.length, textareaEl.value.length);
@@ -59,6 +60,7 @@
     }
   }
 
+  // programmatic save for external callers
   export function save() { return runSave(); }
 
   function handleInput(e: Event) {
@@ -91,26 +93,29 @@
   });
 </script>
 
-<div class="ne-shell ne-shell--{placement}">
-  <!-- Header row -->
+<!-- Use the shared paper-editor classes so the note UI matches the rest of the app -->
+<div class="paper-editor ne-shell ne-shell--{placement}">
   <div class="ne-header">
     <div class="ne-header-left">
       {#if placement === 'sidebar'}
-        <button class="ne-back-btn" type="button" on:click={() => { onClose?.(); dispatch('close'); }} aria-label="Close note editor">
+        <button
+          type="button"
+          class="paper-btn ne-back-btn"
+          on:click={() => { onClose?.(); dispatch('close'); }}
+          aria-label="Close note editor"
+        >
           ← back
         </button>
       {/if}
-      <span class="ne-label">
-        {placement === 'popup' ? 'highlight note' : 'document note'}
-      </span>
+
+      <p class="paper-editor-label ne-label">
+        {placement === 'popup' ? 'Highlight note editor' : 'Document note editor'}
+      </p>
     </div>
 
-    <!-- Save status badge -->
-    <span class="ne-status ne-status--{status}" aria-live="polite">
+    <span class="paper-save-status ne-status ne-status--{status}" aria-live="polite">
       {#if status === 'saving'}
-        <svg class="ne-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
+        <svg class="ne-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         <span>Saving…</span>
       {:else if status === 'saved'}
         <span>Saved</span>
@@ -120,162 +125,42 @@
     </span>
   </div>
 
-  <!-- Highlight quote (popup only) -->
   {#if highlight?.extracted_text}
-    <p class="ne-quote">{highlight.extracted_text}</p>
+    <p class="paper-editor-quote ne-quote">{highlight.extracted_text}</p>
   {/if}
 
-  <!-- Textarea -->
   <textarea
     bind:this={textareaEl}
-    class="ne-textarea"
+    class="paper-editor-textarea ne-textarea"
     placeholder={placement === 'popup' ? 'Add a note for this highlight…' : 'Write a note for this document…'}
     aria-label={ariaLabel}
     bind:value={draft}
     on:input={handleInput}
   ></textarea>
 
-  <!-- Idle hint -->
   {#if status === 'idle'}
-    <p class="ne-hint">
+    <p class="paper-save-status ne-hint">
       {placement === 'popup' && highlight ? 'Start typing to autosave this highlight note.' : 'Start typing to autosave this document note.'}
     </p>
   {/if}
 </div>
 
 <style>
-  .ne-shell {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: var(--paper);
-    border-top: 0.5px solid var(--rule);
-    padding: 14px 18px 16px;
-  }
-  .ne-shell--popup {
-    background: transparent;
-    border-top: none;
-    padding: 0;
-    gap: 8px;
-  }
+  /* Minimal overrides - prefer the global paper theme classes */
+  .ne-shell { padding: 0; }
+  .ne-shell--popup { padding: 0; }
 
-  .ne-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
+  .ne-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .ne-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 
-  .ne-header-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-  }
+  /* Keep a small size for the back button so it doesn't dominate */
+  .ne-back-btn { padding: 4px 8px; font-size: 11px; }
 
-  .ne-back-btn {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 300;
-    letter-spacing: 0.05em;
-    color: var(--ink-3);
-    background: transparent;
-    border: 0.5px solid var(--rule);
-    border-radius: 5px;
-    padding: 3px 8px;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: background 0.15s, color 0.15s;
-  }
-  .ne-back-btn:hover { background: var(--paper-2); color: var(--ink); }
-
-  .ne-label {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 300;
-    letter-spacing: 0.10em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-  }
-
-  /* Status badge */
-  .ne-status {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 300;
-    letter-spacing: 0.06em;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    flex-shrink: 0;
-    min-width: 0;
-    color: transparent; /* invisible when idle */
-    background: transparent;
-    transition: color 0.2s, background 0.2s;
-  }
-  .ne-status--saving {
-    color: #92400e;
-    background: rgba(245,158,11,.12);
-  }
-  .ne-status--saved {
-    color: #166534;
-    background: rgba(34,197,94,.12);
-  }
-  .ne-status--error {
-    color: #be123c;
-    background: rgba(244,63,94,.12);
-  }
-
-  .ne-spin {
-    width: 10px;
-    height: 10px;
-    animation: ne-spin 0.8s linear infinite;
-    flex-shrink: 0;
-  }
+  .ne-spin { width: 12px; height: 12px; animation: ne-spin 0.8s linear infinite; }
   @keyframes ne-spin { to { transform: rotate(360deg); } }
 
-  /* Quote block */
-  .ne-quote {
-    font-family: var(--font-serif);
-    font-size: 13px;
-    font-style: italic;
-    color: var(--ink-2);
-    border-left: 1.5px solid var(--accent-soft);
-    padding-left: 9px;
-    margin: 0;
-    line-height: 1.6;
-  }
-
-  /* Textarea */
-  .ne-textarea {
-    width: 100%;
-    min-height: 110px;
-    font-family: var(--font-serif);
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 1.6;
-    color: var(--ink);
-    background: var(--paper-2);
-    border: 0.5px solid var(--rule);
-    border-radius: 6px;
-    padding: 12px 14px;
-    outline: none;
-    resize: none;
-    transition: border-color 0.15s, background 0.15s;
-  }
-  .ne-textarea:focus {
-    background: var(--paper);
-    border-color: rgba(184,92,46,0.30);
-  }
-  .ne-textarea::placeholder { color: var(--ink-3); }
-  .ne-hint {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 300;
-    color: var(--ink-3);
-    letter-spacing: 0.04em;
-    margin: 0;
-  }
+  /* Ensure the paper-editor textarea uses the app's UI rhythm */
+  .paper-editor-textarea { font-family: var(--font-mono); font-size: 11.5px; }
+  .paper-editor-quote { font-size: 11px; }
+  .paper-save-status { font-size: 10px; }
 </style>
