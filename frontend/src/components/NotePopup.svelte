@@ -88,21 +88,21 @@
 
   .np-title {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 300;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--ink-3);
   }
 
   .np-close {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--ink-3);
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 2px 4px;
-    border-radius: 4px;
+    padding: 4px 6px;
+    border-radius: 6px;
     line-height: 1;
     transition: color 0.15s, background 0.15s;
   }

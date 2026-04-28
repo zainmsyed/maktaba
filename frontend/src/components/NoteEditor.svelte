@@ -238,28 +238,29 @@
 
   /* Quote block */
   .ne-quote {
-    font-size: 11px;
+    font-family: var(--font-serif);
+    font-size: 13px;
     font-style: italic;
     color: var(--ink-2);
     border-left: 1.5px solid var(--accent-soft);
     padding-left: 9px;
     margin: 0;
-    line-height: 1.55;
+    line-height: 1.6;
   }
 
   /* Textarea */
   .ne-textarea {
     width: 100%;
-    min-height: 90px;
-    font-family: var(--font-mono);
-    font-size: 11.5px;
-    font-weight: 300;
-    line-height: 1.70;
+    min-height: 110px;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.6;
     color: var(--ink);
     background: var(--paper-2);
     border: 0.5px solid var(--rule);
     border-radius: 6px;
-    padding: 10px 12px;
+    padding: 12px 14px;
     outline: none;
     resize: none;
     transition: border-color 0.15s, background 0.15s;
@@ -271,7 +272,7 @@
   .ne-textarea::placeholder { color: var(--ink-3); }
   .ne-hint {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 300;
     color: var(--ink-3);
     letter-spacing: 0.04em;
