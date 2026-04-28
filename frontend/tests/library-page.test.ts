@@ -115,7 +115,7 @@ describe('library page', () => {
     });
 
     await waitFor(() => {
-      expect(getByText('No documents yet — upload a PDF or EPUB to get started.')).toBeTruthy();
+      expect(getByText('No documents yet - upload a PDF or EPUB to get started.')).toBeTruthy();
     });
 
     const fileInput = container.querySelector('input[type="file"]');
@@ -220,15 +220,13 @@ describe('library page', () => {
       },
     });
 
-    await waitFor(() => {
-      expect(getByText('Processing')).toBeTruthy();
-    });
+    await advanceAndFlush(0);
+
+    expect(getByText('Processing')).toBeTruthy();
 
     await advanceAndFlush(5000);
 
-    await waitFor(() => {
-      expect(getByText('Ready')).toBeTruthy();
-    });
+    expect(getByText('Ready')).toBeTruthy();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

@@ -1,0 +1,284 @@
+/* ─── Maktaba design tokens ─────────────────────────────────────────────────
+   Single source-of-truth for the paper-style UI.
+   Import this file in any route that needs the paper theme.
+   Usage: @import '../../../lib/theme.css';  (adjust path as needed)
+   Or reference via $lib alias: @import '$lib/theme.css';
+──────────────────────────────────────────────────────────────────────────── */
+
+/* 1. Tokens */
+:root {
+  --paper:   #faf8f4;
+  --paper-2: #f2f0eb;
+  --paper-3: #e8e5de;
+  --ink:     #1a1814;
+  --ink-2:   #4a4640;
+  --ink-3:   #8a8680;
+  --accent:  #b85c2e;
+  --accent-soft: #f0e6dc;
+  --rule:    rgba(26, 24, 20, 0.10);
+  --hl-y:    rgba(245, 210, 100, 0.38);
+  --hl-g:    rgba(100, 185, 130, 0.32);
+  --hl-b:    rgba(100, 150, 220, 0.30);
+
+  --font-serif: 'Lora', Georgia, serif;
+  --font-mono:  'DM Mono', ui-monospace, monospace;
+}
+
+/* 2. Global reset for paper pages */
+.paper-page {
+  min-height: 100vh;
+  background: var(--paper-3);
+  color: var(--ink);
+  font-family: var(--font-serif);
+  color-scheme: light;
+}
+
+/* 3. Top bar */
+.paper-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 46px;
+  padding: 0 22px;
+  background: rgba(250, 248, 244, 0.95);
+  border-bottom: 0.5px solid var(--rule);
+  backdrop-filter: blur(8px);
+}
+
+.paper-wordmark {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.paper-nav { display: flex; gap: 2px; }
+
+.paper-nav-link {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.paper-nav-link:hover,
+.paper-nav-link.active { color: var(--ink); background: var(--paper-2); }
+
+/* 4. Sidebar */
+.paper-sidebar {
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-2);
+  border-left: 0.5px solid var(--rule);
+  overflow: hidden;
+}
+
+.paper-sidebar-tabs {
+  display: flex;
+  border-bottom: 0.5px solid var(--rule);
+  padding: 0 18px;
+  flex-shrink: 0;
+}
+
+.paper-tab {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 300;
+  letter-spacing: 0.09em;
+  color: var(--ink-3);
+  padding: 14px 10px 12px;
+  cursor: pointer;
+  border-bottom: 1.5px solid transparent;
+  user-select: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+.paper-tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+.paper-tab:hover:not(.active) { color: var(--ink-2); }
+
+.paper-search {
+  padding: 10px 16px;
+  border-bottom: 0.5px solid var(--rule);
+  flex-shrink: 0;
+}
+.paper-search input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--ink);
+  background: var(--paper);
+  border: 0.5px solid var(--rule);
+  border-radius: 6px;
+  padding: 7px 10px;
+  outline: none;
+}
+.paper-search input::placeholder { color: var(--ink-3); }
+
+/* 5. Note list items */
+.paper-note-item {
+  padding: 15px 18px;
+  border-bottom: 0.5px solid var(--rule);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.12s;
+}
+.paper-note-item:hover,
+.paper-note-item.active { background: var(--paper); }
+.paper-note-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+
+.paper-note-loc {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 300;
+  color: var(--ink-3);
+  letter-spacing: 0.08em;
+  margin-bottom: 7px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.paper-note-quote {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  font-style: italic;
+  margin-bottom: 8px;
+  border-left: 1.5px solid var(--paper-3);
+  padding-left: 9px;
+}
+
+.paper-note-body {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 300;
+  line-height: 1.65;
+  color: var(--ink);
+}
+
+/* 6. Note editor (bottom of sidebar) */
+.paper-editor {
+  border-top: 0.5px solid var(--rule);
+  padding: 14px 18px 16px;
+  background: var(--paper);
+  flex-shrink: 0;
+}
+
+.paper-editor-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 300;
+  color: var(--ink-3);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  margin-bottom: 9px;
+}
+
+.paper-editor-quote {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ink-2);
+  border-left: 1.5px solid var(--accent-soft);
+  padding-left: 9px;
+  margin-bottom: 10px;
+  line-height: 1.55;
+}
+
+.paper-editor-textarea {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 300;
+  line-height: 1.70;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+}
+.paper-editor-textarea::placeholder { color: var(--ink-3); }
+
+.paper-save-status {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 300;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+
+/* 7. Buttons */
+.paper-btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  background: transparent;
+  border: 0.5px solid var(--rule);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.paper-btn:hover { background: var(--paper-2); color: var(--ink); }
+.paper-btn.active { background: var(--paper-2); color: var(--ink); border-color: var(--ink-3); }
+
+.paper-btn-accent {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  background: transparent;
+  border: 0.5px solid var(--accent);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.paper-btn-accent:hover { background: var(--accent-soft); }
+
+/* 8. Scrollbar */
+.paper-sidebar *::-webkit-scrollbar { width: 4px; }
+.paper-sidebar *::-webkit-scrollbar-track { background: transparent; }
+.paper-sidebar *::-webkit-scrollbar-thumb { background: var(--paper-3); border-radius: 4px; }
+
+/* 9. Progress bar (topbar) */
+.paper-progress-track {
+  width: 68px; height: 2px;
+  background: var(--paper-3);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.paper-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+
+/* 10. Color dots */
+.dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.dot-y { background: #c9980a; }
+.dot-g { background: #3a9e5f; }
+.dot-b { background: #3a72c4; }
+.dot-r { background: #c44040; }
+
+/* 11. Utility */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); border: 0;
+}

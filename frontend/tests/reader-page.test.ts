@@ -189,7 +189,7 @@ describe('reader page', () => {
       expect(getByRole('button', { name: 'Fit page' })).toBeTruthy();
     });
 
-    await fireEvent.click(getByRole('button', { name: 'Next' }));
+    await fireEvent.click(getByRole('button', { name: /next page/i }));
 
     await waitFor(() => {
       expect(getAllByText('2 / 3').length).toBeGreaterThan(0);
@@ -215,7 +215,7 @@ describe('reader page', () => {
     });
 
     await waitFor(() => {
-      expect(getByText('Highlights')).toBeTruthy();
+      expect(getAllByText('Highlights').length).toBeGreaterThan(0);
       expect(getByRole('button', { name: 'Select text' })).toBeTruthy();
       expect(getByRole('button', { name: 'Draw box' })).toBeTruthy();
       expect(getByText(/Select text directly in the PDF/i)).toBeTruthy();
@@ -322,6 +322,7 @@ describe('reader page', () => {
     });
     await fireEvent.click(highlightSidebarButton);
     expect(scrollIntoViewSpy).toHaveBeenCalled();
+    await advanceAndFlush(1200);
 
     const addNoteButton = getAllByRole('button', { name: 'Add note' }).find(
       (button) => button.textContent?.trim() === 'Add note',
@@ -340,8 +341,26 @@ describe('reader page', () => {
     await advanceAndFlush(500);
     await advanceAndFlush(0);
 
-    expect(getByText('Document notes')).toBeTruthy();
-    expect(getByText('Standalone reflection')).toBeTruthy();
+    await waitFor(() => {
+      expect(getByText('Saved')).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(getByText('Document notes')).toBeTruthy();
+      expect(getByText('Standalone reflection')).toBeTruthy();
+    });
+
+    const notesSidebar = getByTestId('notes-sidebar');
+    const sidebarHeadings = Array.from(notesSidebar.querySelectorAll('p'))
+      .filter((el) => el.className.includes('paper-sidebar-section-label') || el.className.includes('paper-note-group-label'))
+      .map((el) => el.textContent?.trim())
+      .filter((text): text is string => Boolean(text));
+    expect(sidebarHeadings).toMatchInlineSnapshot(`
+      [
+        "Notes",
+        "Document notes",
+        "Page 1",
+      ]
+    `);
 
     const noteCreateCall = fetchMock.mock.calls.find(
       ([input, init]) =>
@@ -513,8 +532,8 @@ describe('reader page', () => {
 
     // Find the sidebar list item for the created note and click its delete button
     const createdNoteNode = Array.from(document.querySelectorAll('button')).find((el) => el.textContent?.includes('To be deleted')) as HTMLElement | undefined;
-    const noteListItem = createdNoteNode?.closest('li') as HTMLElement | null;
-    const deleteButton = noteListItem?.querySelector('button[aria-label="Delete note"]') as HTMLElement | null;
+    const noteContainer = createdNoteNode?.closest('.paper-note-item, li') as HTMLElement | null;
+    const deleteButton = noteContainer?.querySelector('button[aria-label="Delete note"]') as HTMLElement | null;
     if (deleteButton) {
       await fireEvent.click(deleteButton);
       await advanceAndFlush(0);

@@ -20,8 +20,10 @@
   let loading = true;
   let error: string | null = null;
   let sortMode: 'last_opened' | 'date_added' | 'title' = 'date_added';
-  // removed global uploading flag; use per-item uploading state
   let pollTimer: number | null = null;
+
+  const BLOCKING_JOB_TYPES = new Set(['extract_text', 'ocr']);
+  const COVER_CLASSES = ['cover-1', 'cover-2', 'cover-3', 'cover-4'];
 
   async function loadDocuments(options: { silent?: boolean } = {}) {
     const { silent = false } = options;
@@ -60,8 +62,6 @@
     }
   });
 
-  const BLOCKING_JOB_TYPES = new Set(['extract_text', 'ocr']);
-
   function jobStatus(jobs: JobModel[] | undefined) {
     const relevantJobs = (jobs || []).filter((job: any) => BLOCKING_JOB_TYPES.has(job.job_type || ''));
     if (relevantJobs.length === 0) return 'ready';
@@ -69,6 +69,47 @@
     if (statuses.has('failed')) return 'failed';
     if ([...statuses].some((s) => s === 'pending' || s === 'processing')) return 'processing';
     return 'ready';
+  }
+
+  function statusLabel(entry: DocWithJobs) {
+    if (entry.uploading) return 'Uploading…';
+    if (entry.error) return 'Upload failed';
+    const status = jobStatus(entry.jobs);
+    if (status === 'processing') return 'Processing';
+    if (status === 'failed') return 'Failed';
+    return 'Ready';
+  }
+
+  function progressLabel(entry: DocWithJobs) {
+    if (entry.uploading) return 'Uploading…';
+    if (entry.error) return 'Upload failed';
+    const status = jobStatus(entry.jobs);
+    if (status === 'processing') return 'Extracting…';
+    if (status === 'failed') return 'Needs attention';
+    const pageCount = Number(entry.document?.page_count ?? 0);
+    return pageCount > 0 ? `${pageCount} pages` : 'Open to read';
+  }
+
+  function statusTone(entry: DocWithJobs) {
+    if (entry.uploading) return 'amber';
+    if (entry.error) return 'rose';
+    const status = jobStatus(entry.jobs);
+    if (status === 'processing') return 'amber';
+    if (status === 'failed') return 'rose';
+    return 'emerald';
+  }
+
+  function progressWidth(entry: DocWithJobs) {
+    if (entry.uploading) return 24;
+    if (entry.error) return 14;
+    const status = jobStatus(entry.jobs);
+    if (status === 'processing') return 42;
+    if (status === 'failed') return 18;
+    const pageCount = Number(entry.document?.page_count ?? 0);
+    if (pageCount > 0) {
+      return Math.min(100, Math.max(36, pageCount * 8));
+    }
+    return entry.document?.format?.toLowerCase() === 'epub' ? 82 : 68;
   }
 
   function humanFormatDate(iso: string | undefined) {
@@ -94,7 +135,6 @@
       const bdt = Date.parse(bd.created_at ?? bd.createdAt ?? '') || 0;
       return bdt - adt;
     }
-    // last_opened: use reading_progress.last_opened or updated_at fallback
     const a_last = ad.reading_progress?.last_opened
       ? Date.parse(ad.reading_progress.last_opened)
       : Date.parse(ad.updated_at ?? ad.updatedAt ?? '') || 0;
@@ -170,101 +210,532 @@
 
     return `/library/${doc.id}`;
   }
+
+  function coverClass(index: number) {
+    return COVER_CLASSES[index % COVER_CLASSES.length];
+  }
 </script>
 
 <svelte:head>
   <title>Library — Maktaba</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 </svelte:head>
 
-<main class="mx-auto max-w-6xl px-6 py-10">
-  <div class="mb-6 flex items-center justify-between">
-    <div>
-      <h1 class="text-3xl font-semibold">Library</h1>
-      <p class="mt-1 text-sm text-slate-400">Your uploaded documents</p>
-    </div>
-
-    <div class="flex items-center gap-3">
-      <label class="relative inline-flex cursor-pointer items-center rounded-full border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200">
-        <input type="file" accept=".pdf,.epub" class="sr-only" on:change={onFileChange} />
-        <svg xmlns="http://www.w3.org/2000/svg" class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5m0 0l5 5m-5-5v12" />
-        </svg>
-        Upload
-      </label>
-
-      <div class="flex items-center gap-2">
-        <label for="library-sort" class="text-sm text-slate-400">Sort</label>
-        <select id="library-sort" bind:value={sortMode} class="rounded-md bg-slate-900/60 px-2 py-1 text-sm text-slate-200 border border-slate-700">
-          <option value="last_opened">Last opened</option>
-          <option value="date_added">Date added</option>
-          <option value="title">Title</option>
-        </select>
+<main class="library-page">
+  <div class="library-shell">
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="wordmark">maktaba</span>
+        <nav class="nav-links" aria-label="Primary">
+          <a class="nav-link active" href="/library">library</a>
+          <a class="nav-link" href="/library/demo">reading</a>
+        </nav>
       </div>
-    </div>
-  </div>
 
-  {#if loading}
-    <div class="rounded-lg border border-slate-700 bg-slate-900/50 p-6 text-center text-slate-400">Loading library…</div>
-  {:else}
-    {#if error}
-      <div class="rounded-lg border border-rose-700 bg-rose-900/30 p-4 text-sm text-rose-200">{error}</div>
-    {:else}
-      {#if documents.length === 0}
-        <div class="rounded-lg border border-slate-700 bg-slate-900/50 p-6 text-center text-slate-400">No documents yet — upload a PDF or EPUB to get started.</div>
+      <div class="topbar-right">
+        <label class="upload-btn">
+          <input type="file" accept=".pdf,.epub" class="sr-only" on:change={onFileChange} />
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" x2="12" y1="3" y2="15"></line>
+          </svg>
+          Upload
+        </label>
+
+        <div class="sort-control">
+          <label for="library-sort" class="sort-label">Sort</label>
+          <select id="library-sort" bind:value={sortMode} class="sort-select">
+            <option value="last_opened">Last opened</option>
+            <option value="date_added">Date added</option>
+            <option value="title">Title</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <section class="library-view">
+      <div class="library-header">
+        <div>
+          <p class="eyebrow">library</p>
+          <h1 class="library-title">Your uploaded documents</h1>
+        </div>
+        <p class="library-summary">{sortedDocuments.length} documents</p>
+      </div>
+
+      {#if loading}
+        <div class="library-state">Loading library…</div>
+      {:else if error}
+        <div class="library-state error">{error}</div>
+      {:else if documents.length === 0}
+        <div class="library-state">No documents yet - upload a PDF or EPUB to get started.</div>
       {:else}
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {#each sortedDocuments as entry (entry.document.id ?? entry.localId)}
-            <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <h2 class="text-sm font-semibold text-white line-clamp-2">{entry.document.title ?? 'Untitled'}</h2>
-                  <div class="mt-2 text-xs text-slate-400">
-                    {#if entry.document.authors && entry.document.authors.length > 0}
-                      {entry.document.authors.join(', ')}
-                    {:else}
-                      Unknown author
-                    {/if}
+        <div class="books-grid">
+          {#each sortedDocuments as entry, index (entry.document.id ?? entry.localId)}
+            <article class="book-card">
+              <div class={`book-cover ${coverClass(index)} ${statusTone(entry)}`}>
+                <div class="cover-noise"></div>
+                <span class="format-badge">{(entry.document.format || '').toUpperCase() || 'PDF'}</span>
+                <span class="cover-title">{entry.document.title ?? 'Untitled'}</span>
+              </div>
+
+              <div class="book-card-body">
+                <div class="book-card-head">
+                  <h2 class="book-card-title">{entry.document.title ?? 'Untitled'}</h2>
+                  <span class={`status-pill ${statusTone(entry)}`}>{statusLabel(entry)}</span>
+                </div>
+
+                <p class="book-card-author">
+                  {#if entry.document.authors && entry.document.authors.length > 0}
+                    {entry.document.authors.join(', ')}
+                  {:else}
+                    Unknown author
+                  {/if}
+                </p>
+
+                <div class="book-progress-row">
+                  <div class="book-prog-bar">
+                    <div class={`book-prog-fill ${statusTone(entry)}`} style={`width: ${progressWidth(entry)}%`}></div>
                   </div>
+                  <span class="book-prog-label">{progressLabel(entry)}</span>
                 </div>
 
-                <div class="flex flex-col items-end gap-2">
-                  <div class="text-xs text-slate-400">{(entry.document.format || '').toUpperCase()}</div>
-
-                  {#if entry.uploading}
-                    <span class="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">Uploading…</span>
-                  {:else if entry.error}
-                    <span class="inline-flex items-center rounded-full bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-300">Upload failed</span>
-                  {:else}
-                    {#if jobStatus(entry.jobs) === 'processing'}
-                      <span class="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">Processing</span>
-                    {:else if jobStatus(entry.jobs) === 'failed'}
-                      <span class="inline-flex items-center rounded-full bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-300">Failed</span>
-                    {:else}
-                      <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">Ready</span>
-                    {/if}
-                  {/if}
-                </div>
-              </div>
-
-              <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
-                <div>{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</div>
-                <div class="flex items-center gap-2">
+                <div class="book-card-footer">
+                  <span class="book-card-date">{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</span>
                   {#if readerHref(entry.document)}
-                    <a
-                      href={readerHref(entry.document)}
-                      class="rounded-md bg-cyan-500/15 px-2 py-1 text-xs text-cyan-100 ring-1 ring-cyan-400/30 transition hover:bg-cyan-500/25"
-                    >
-                      Open
-                    </a>
+                    <a href={readerHref(entry.document)} class="book-open">Open</a>
                   {:else}
-                    <span class="rounded-md bg-slate-800/50 px-2 py-1 text-xs text-slate-500">PDF only</span>
+                    <span class="book-open disabled">PDF only</span>
                   {/if}
                 </div>
               </div>
-            </div>
+            </article>
           {/each}
         </div>
       {/if}
-    {/if}
-  {/if}
+    </section>
+  </div>
 </main>
+
+<style>
+  :global(html) {
+    min-height: 100%;
+  }
+
+  :global(body) {
+    margin: 0;
+    min-height: 100vh;
+    color: #1a1814;
+    background: linear-gradient(180deg, #f7f4ee 0%, #e8e5de 100%);
+    font-family: 'Lora', Georgia, serif;
+    color-scheme: light;
+  }
+
+  :global(a) {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .library-page {
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .library-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 22px;
+    background: rgba(250, 248, 244, 0.94);
+    border-bottom: 1px solid rgba(26, 24, 20, 0.08);
+    backdrop-filter: blur(8px);
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    min-width: 0;
+  }
+
+  .wordmark {
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.07em;
+    color: #1a1814;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 4px;
+  }
+
+  .nav-link {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 300;
+    letter-spacing: 0.06em;
+    color: #8a8680;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .nav-link:hover,
+  .nav-link.active {
+    color: #1a1814;
+    background: rgba(242, 240, 235, 0.9);
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(26, 24, 20, 0.14);
+    background: rgba(242, 240, 235, 0.8);
+    color: #1a1814;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 300;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s, border-color 0.15s;
+  }
+
+  .upload-btn:hover {
+    transform: translateY(-1px);
+    background: #f0e6dc;
+    border-color: rgba(26, 24, 20, 0.18);
+  }
+
+  .sort-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .sort-label {
+    font-size: 10px;
+    font-weight: 300;
+    color: #8a8680;
+  }
+
+  .sort-select {
+    border: 1px solid rgba(26, 24, 20, 0.12);
+    border-radius: 8px;
+    background: rgba(250, 248, 244, 0.95);
+    color: #1a1814;
+    padding: 7px 10px;
+    font-size: 10px;
+    font-weight: 300;
+    font-family: 'DM Mono', monospace;
+    outline: none;
+  }
+
+  .library-view {
+    flex: 1;
+    padding: 30px clamp(18px, 3vw, 40px) 40px;
+  }
+
+  .library-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 auto 22px;
+    max-width: 1280px;
+  }
+
+  .eyebrow {
+    margin: 0 0 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 300;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #8a8680;
+  }
+
+  .library-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 500;
+    color: #1a1814;
+  }
+
+  .library-summary {
+    margin: 4px 0 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    color: #8a8680;
+  }
+
+  .library-state {
+    max-width: 1280px;
+    margin: 0 auto;
+    border: 1px solid rgba(26, 24, 20, 0.08);
+    border-radius: 18px;
+    background: rgba(250, 248, 244, 0.88);
+    padding: 26px 24px;
+    text-align: center;
+    color: #4a4640;
+    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.06);
+  }
+
+  .library-state.error {
+    border-color: rgba(185, 28, 28, 0.2);
+    background: rgba(254, 242, 242, 0.9);
+    color: #991b1b;
+  }
+
+  .books-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  .book-card {
+    display: flex;
+    flex-direction: column;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(250, 248, 244, 0.95);
+    border: 1px solid rgba(26, 24, 20, 0.08);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+
+  .book-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+  }
+
+  .book-cover {
+    position: relative;
+    aspect-ratio: 2 / 3;
+    padding: 14px 12px;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .cover-noise {
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+    opacity: 0.16;
+    mix-blend-mode: screen;
+  }
+
+  .format-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 3px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  .cover-title {
+    position: relative;
+    z-index: 1;
+    font-size: 12px;
+    line-height: 1.35;
+    font-weight: 500;
+  }
+
+  .cover-1 { background: linear-gradient(145deg, #2c3e50, #1a252f); }
+  .cover-2 { background: linear-gradient(145deg, #8b4513, #5c2d0a); }
+  .cover-3 { background: linear-gradient(145deg, #1a3a2a, #0d1f16); }
+  .cover-4 { background: linear-gradient(145deg, #2d1b4e, #1a0f2e); }
+
+  .book-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 14px 16px;
+  }
+
+  .book-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .book-card-title {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.35;
+    font-weight: 500;
+    color: #1a1814;
+  }
+
+  .book-card-author {
+    margin: 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 300;
+    color: #8a8680;
+  }
+
+  .status-pill {
+    flex-shrink: 0;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .status-pill.emerald {
+    background: rgba(16, 185, 129, 0.12);
+    color: #047857;
+  }
+
+  .status-pill.amber {
+    background: rgba(245, 158, 11, 0.12);
+    color: #92400e;
+  }
+
+  .status-pill.rose {
+    background: rgba(244, 63, 94, 0.12);
+    color: #be123c;
+  }
+
+  .book-progress-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .book-prog-bar {
+    flex: 1;
+    height: 2px;
+    border-radius: 999px;
+    background: rgba(232, 229, 222, 0.9);
+    overflow: hidden;
+  }
+
+  .book-prog-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #b85c2e, #d99447);
+  }
+
+  .book-prog-fill.emerald {
+    background: linear-gradient(90deg, #36b37e, #65d19c);
+  }
+
+  .book-prog-fill.amber {
+    background: linear-gradient(90deg, #d97706, #f59e0b);
+  }
+
+  .book-prog-fill.rose {
+    background: linear-gradient(90deg, #e11d48, #fb7185);
+  }
+
+  .book-prog-label {
+    flex-shrink: 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    font-weight: 300;
+    color: #8a8680;
+    white-space: nowrap;
+  }
+
+  .book-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .book-card-date {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    font-weight: 300;
+    color: #8a8680;
+  }
+
+  .book-open {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 54px;
+    padding: 6px 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(184, 92, 46, 0.28);
+    background: rgba(240, 230, 220, 0.55);
+    color: #b85c2e;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: transform 0.15s, background 0.15s, border-color 0.15s;
+  }
+
+  .book-open:hover {
+    transform: translateY(-1px);
+    background: rgba(240, 230, 220, 0.9);
+    border-color: rgba(184, 92, 46, 0.4);
+  }
+
+  .book-open.disabled {
+    border-color: rgba(26, 24, 20, 0.12);
+    background: rgba(242, 240, 235, 0.72);
+    color: #8a8680;
+  }
+
+  @media (max-width: 768px) {
+    .topbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .topbar-left,
+    .topbar-right {
+      flex-wrap: wrap;
+      justify-content: space-between;
+    }
+
+    .library-header {
+      flex-direction: column;
+    }
+
+    .books-grid {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+  }
+</style>

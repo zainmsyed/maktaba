@@ -18,6 +18,7 @@
     type LibraryHighlight,
   } from './highlight-api';
   import NoteEditor from '../../../components/NoteEditor.svelte';
+  import NotePopup from '../../../components/NotePopup.svelte';
 
   export let data: {
     apiUrl: string;
@@ -107,9 +108,10 @@
 
   async function saveFromEditor(draft: string) {
     const target = activeNoteTarget;
+    if (!target) return null;
     const revision = noteEditorRevision;
     const note = activeNoteRecord;
-    return await persistNoteDraft(target as NoteEditorTarget, note, draft, revision);
+    return await persistNoteDraft(target, note, draft, revision);
   }
 
   function promptDeleteHighlight(highlight: PopupHighlightLike) {
@@ -138,6 +140,8 @@
     ? data.document.authors.join(', ')
     : 'Unknown author';
   $: pageDisplay = totalPages > 0 ? `${currentPage} / ${totalPages}` : '—';
+  $: readingProgressLabel = totalPages > 0 ? `p. ${currentPage} of ${totalPages}` : 'p. —';
+  $: readingProgressPercent = totalPages > 0 ? Math.max(1, Math.round((currentPage / totalPages) * 100)) : 0;
   $: zoomDisplay =
     zoomMode === 'fit-width'
       ? 'Fit width'
@@ -482,6 +486,27 @@
           // ignore
         }
 
+        const previousOutline = el.style.outline;
+        const previousOutlineOffset = el.style.outlineOffset;
+        const previousTabIndex = el.getAttribute('tabindex');
+        if (previousTabIndex === null) {
+          el.setAttribute('tabindex', '-1');
+        }
+        try {
+          el.focus?.({ preventScroll: true } as any);
+        } catch (e) {
+          // ignore
+        }
+        el.style.outline = '2px solid rgb(34 211 238 / 0.9)';
+        el.style.outlineOffset = '2px';
+        window.setTimeout(() => {
+          el.style.outline = previousOutline;
+          el.style.outlineOffset = previousOutlineOffset;
+          if (previousTabIndex === null) {
+            el.removeAttribute('tabindex');
+          }
+        }, 1200);
+
         // Try to trigger the viewer's highlight activation (many viewers respond to click)
         try {
           el.click?.();
@@ -811,6 +836,10 @@
   }
 
   onMount(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo(0, 0);
+      history.scrollRestoration = 'manual';
+    }
     subscribeToHighlightsStore();
     syncHighlightsStore();
     void loadHighlights();
@@ -839,46 +868,32 @@
   {@const highlightId = highlight.id ?? ''}
   {@const backendHighlight = getHighlightById(highlightId)}
   {@const highlightNote = getPrimaryNoteForHighlight(highlightId)}
-  <div class="Highlight__popup flex flex-col gap-3 rounded-2xl border border-slate-700/80 bg-slate-950/95 p-4 shadow-2xl shadow-slate-950/60">
-    <div class="space-y-2">
-      <p class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Highlight</p>
-      {#if highlight.comment || highlight.content?.text || highlight.extracted_text}
-        <div class="text-sm text-slate-100">
-          {highlight.comment || highlight.content?.text || highlight.extracted_text}
-        </div>
-      {:else}
-        <div class="text-sm text-slate-500">Comment has no text</div>
-      {/if}
-
-      {#if highlightNote}
-        <p class="text-xs text-slate-400">Saved note: {highlightNote.content || '(empty note)'}</p>
-      {:else}
-        <p class="text-xs text-slate-500">No note yet. Add one below.</p>
-      {/if}
-    </div>
-
-    <div class="flex items-center gap-2">
+  <div class="Highlight__popup hp-popup">
+    <p class="hp-label">highlight</p>
+    <p class="hp-text">
+      {highlight.comment || highlight.content?.text || highlight.extracted_text || 'No text extracted'}
+    </p>
+    {#if highlightNote}
+      <p class="hp-note-preview">{highlightNote.content || '(empty note)'}</p>
+    {/if}
+    <div class="hp-actions">
       <button
         type="button"
-        class="TipButton"
+        class="hp-action-btn"
         aria-label={highlightNote ? 'Edit note' : 'Add note'}
         on:click={() => void openHighlightNoteEditor(highlightId, setPinned, 'popup')}
       >
-        <div style="height: 1.1rem; width: 1.1rem;" class="icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
-        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+        {highlightNote ? 'edit note' : 'add note'}
       </button>
-
       <button
         type="button"
-        class="TipButton"
-        style="color: rgb(220 38 38);"
+        class="hp-action-btn hp-action-btn--danger"
         aria-label="Delete highlight"
         on:click={() => promptDeleteHighlight(highlight)}
       >
-        <div style="height: 1.1rem; width: 1.1rem;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        delete
       </button>
     </div>
   </div>
@@ -896,174 +911,961 @@
       highlight.extracted_text?.trim() ??
       '',
   } as BackendHighlight}
-  <div class="Highlight__popup EditPopup flex flex-col gap-3 rounded-2xl border border-slate-700/80 bg-slate-950/95 p-4 shadow-2xl shadow-slate-950/60">
+  <NotePopup
+    ariaLabel={getPrimaryNoteForHighlight(backendHighlight?.id ?? '') ? 'Edit highlight note' : 'Add highlight note'}
+    title="highlight note"
+    onClose={() => closeNoteEditor()}
+  >
     <NoteEditor
       placement="popup"
       initialContent={getPrimaryNoteForHighlight(backendHighlight?.id)?.content ?? ''}
       highlight={backendHighlight ?? fallbackHighlight}
+      onChange={(value) => { noteDraft = value; }}
       onSave={saveFromEditor}
-      onClose={() => { setPinned(false); closeNoteEditor(); }}
+      onClose={() => closeNoteEditor()}
       bind:this={noteEditorRef}
     />
-  </div>
+  </NotePopup>
 {/snippet}
 
 <svelte:head>
   <title>{documentTitle} — Maktaba Reader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper-bg: #faf8f4;
+      --paper-bg-2: #f2f0eb;
+      --paper-bg-3: #e8e5de;
+      --ink: #1a1814;
+      --ink-2: #4a4640;
+      --ink-3: #8a8680;
+      --accent: #b85c2e;
+      --accent-soft: #f0e6dc;
+      --rule: rgba(26, 24, 20, 0.1);
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper-bg-3);
+      color: var(--ink);
+      color-scheme: light;
+      font-family: 'Lora', Georgia, serif;
+      overflow: hidden;
+    }
+
+    .maktaba-paper {
+      min-height: 100vh;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 46px minmax(0, 1fr);
+      background: var(--paper-bg);
+      color: var(--ink);
+      font-family: 'Lora', Georgia, serif;
+      overflow: hidden;
+    }
+
+    .reader-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 46px;
+      padding: 0 18px;
+      background: rgba(250,248,244,0.97);
+      border-bottom: 0.5px solid var(--rule);
+      backdrop-filter: blur(8px);
+    }
+
+    .reader-topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+
+    .reader-wordmark {
+      font-family: var(--font-serif);
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.07em;
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    .reader-nav { display: flex; gap: 2px; align-items: center; }
+
+    .reader-nav-link {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 300;
+      letter-spacing: 0.06em;
+      color: var(--ink-3);
+      padding: 5px 8px;
+      border-radius: 5px;
+      text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    .reader-nav-link:hover, .reader-nav-link.active { color: var(--ink); background: var(--paper-2); }
+
+    .reader-topbar-center {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .reader-topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    /* ── Topbar atoms ───────────────────── */
+    .tb-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 300;
+      color: var(--ink-3);
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .tb-progress-track { width: 68px; height: 2px; background: var(--paper-3); border-radius: 999px; overflow: hidden; }
+    .tb-progress-fill  { height: 100%; background: var(--accent); border-radius: inherit; }
+
+    .tb-status {
+      font-family: var(--font-mono); font-size: 9px; font-weight: 400;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 999px;
+    }
+    .tb-status--processing { background: rgba(245,158,11,.12); color: #92400e; }
+    .tb-status--failed     { background: rgba(244,63,94,.12);  color: #be123c; }
+
+    /* ── Dropdown menus ────────────────── */
+    .tb-menu { position: relative; }
+
+    .tb-summary {
+      list-style: none;
+      display: flex; align-items: center; gap: 5px;
+      font-family: var(--font-mono); font-size: 10px; font-weight: 300;
+      letter-spacing: 0.05em; color: var(--ink-3);
+      padding: 4px 9px;
+      border: 0.5px solid var(--rule); border-radius: 6px;
+      cursor: pointer; user-select: none;
+      background: transparent; white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tb-summary:hover { background: var(--paper-2); color: var(--ink); }
+    .tb-summary::after { content: '\25BE'; font-size: 8px; margin-left: 2px; }
+    .tb-summary::-webkit-details-marker { display: none; }
+
+    .tb-dropdown {
+      position: absolute; top: calc(100% + 4px); left: 0; z-index: 200;
+      min-width: 150px;
+      background: rgba(250,248,244,0.99);
+      border: 0.5px solid rgba(26, 24, 20, 0.14);
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.08);
+      backdrop-filter: none;
+      padding: 4px 0;
+    }
+    .tb-dropdown--right { left: auto; right: 0; min-width: 180px; }
+
+    .tb-dropdown-item {
+      display: flex; align-items: center; width: 100%;
+      padding: 8px 14px;
+      font-family: var(--font-mono); font-size: 10px; font-weight: 300;
+      letter-spacing: 0.05em; color: var(--ink);
+      background: transparent; border: none; text-align: left;
+      cursor: pointer; transition: background 0.12s;
+    }
+    .tb-dropdown-item:hover { background: var(--paper-2); }
+    .tb-dropdown-item.tb-active { color: var(--ink); font-weight: 400; background: rgba(184,92,46,0.08); }
+    .tb-dropdown-item.tb-active::before { content: '\2713  '; }
+
+    .tb-dropdown-divider { height: 0.5px; background: var(--rule); margin: 4px 0; }
+
+    .tb-slider-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.28); }
+    .tb-slider-btn { font-size: 14px; color: var(--ink-3); background: transparent; border: none; cursor: pointer; padding: 0 2px; flex-shrink: 0; line-height: 1; }
+    .tb-slider-btn:hover { color: var(--ink); }
+    .tb-slider { flex: 1; accent-color: var(--accent); }
+
+    /* ── Page navigation ──────────────── */
+    .tb-nav { display: flex; align-items: center; border: 0.5px solid var(--rule); border-radius: 6px; overflow: hidden; }
+    .tb-nav-btn {
+      font-family: var(--font-mono); font-size: 13px; color: var(--ink-3);
+      background: transparent; border: none; padding: 3px 9px; cursor: pointer;
+      transition: background 0.12s, color 0.12s; line-height: 1;
+    }
+    .tb-nav-btn:first-child { border-right: 0.5px solid var(--rule); }
+    .tb-nav-btn:last-child  { border-left:  0.5px solid var(--rule); }
+    .tb-nav-btn:hover:not(:disabled) { background: var(--paper-2); color: var(--ink); }
+    .tb-nav-btn:disabled { opacity: 0.3; cursor: default; }
+    .tb-nav-page { padding: 3px 9px; }
+
+    /* ── Link buttons ────────────────── */
+    .tb-link {
+      font-family: var(--font-mono); font-size: 10px; font-weight: 300;
+      letter-spacing: 0.05em; color: var(--ink-3);
+      text-decoration: none; padding: 4px 9px;
+      border: 0.5px solid var(--rule); border-radius: 6px;
+      white-space: nowrap; transition: background 0.15s, color 0.15s;
+    }
+    .tb-link:hover { background: var(--paper-2); color: var(--ink); }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); border: 0;
+    }
+
+    /* ── Highlight popup ──────────────────────── */
+    .hp-popup {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 240px;
+      max-width: 320px;
+      background: var(--paper);
+      border: 0.5px solid rgba(26,24,20,0.14);
+      border-radius: 10px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.07);
+      padding: 14px 16px;
+    }
+    .hp-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 300;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      margin: 0 0 6px;
+    }
+    .hp-text {
+      font-family: var(--font-serif);
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--ink);
+      margin: 0 0 8px;
+    }
+    .hp-note-preview {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 300;
+      color: var(--ink-2);
+      border-left: 1.5px solid var(--accent-soft);
+      padding-left: 8px;
+      margin: 0 0 8px;
+      line-height: 1.55;
+    }
+    .hp-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .hp-action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 300;
+      letter-spacing: 0.05em;
+      color: var(--ink-3);
+      background: transparent;
+      border: 0.5px solid var(--rule);
+      border-radius: 5px;
+      padding: 4px 9px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .hp-action-btn:hover { background: var(--paper-2); color: var(--ink); }
+    .hp-action-btn--danger:hover { background: rgba(244,63,94,.08); color: #be123c; border-color: rgba(244,63,94,.25); }
+
+    .reader-workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      min-height: 0;
+      height: calc(100vh - 46px);
+    }
+
+    .reader-stage {
+      order: 1;
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      padding: 22px 32px 22px;
+      background: var(--paper-bg);
+    }
+
+    .reader-meta {
+      display: none;
+    }
+
+    .reader-kicker {
+      margin: 0 0 10px;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      font-weight: 300;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+
+    .reader-title {
+      margin: 0;
+      font-size: 19px;
+      font-weight: 500;
+      line-height: 1.3;
+      color: var(--ink);
+    }
+
+    .reader-authors {
+      margin: 12px 0 0;
+      color: var(--ink-3);
+      font-size: 13px;
+    }
+
+    .reader-stage-card {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--paper) !important;
+      border-color: var(--rule) !important;
+      box-shadow: 0 8px 48px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    }
+
+    .reader-stage-body {
+      flex: 1;
+      min-height: 0;
+      padding: 0;
+      background: var(--paper);
+    }
+
+    .reader-sidebar {
+      order: 2;
+      position: relative !important;
+      top: auto !important;
+      height: 100% !important;
+      font-family: 'DM Mono', monospace !important;
+      overflow: hidden !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0 !important;
+      padding: 0 !important;
+      border-radius: 0 !important;
+      border: 0 !important;
+      border-left: 0.5px solid var(--rule) !important;
+      box-shadow: none !important;
+      background: var(--paper-bg-2) !important;
+    }
+
+    .reader-sidebar-tabs {
+      display: flex;
+      padding: 0 18px;
+      border-bottom: 0.5px solid var(--rule);
+      background: var(--paper-bg-2);
+      flex-shrink: 0;
+    }
+
+    .reader-sidebar-tab {
+      padding: 14px 10px 12px;
+      border-bottom: 1.5px solid transparent;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      font-weight: 300;
+      letter-spacing: 0.09em;
+      color: var(--ink-3);
+      text-transform: lowercase;
+    }
+
+    .reader-sidebar-tab.active {
+      color: var(--ink);
+      border-bottom-color: var(--accent);
+    }
+
+    .reader-sidebar-search {
+      padding: 10px 16px;
+      border-bottom: 0.5px solid var(--rule);
+      flex-shrink: 0;
+    }
+
+    .reader-sidebar-search input {
+      width: 100%;
+      border: 0.5px solid var(--rule);
+      border-radius: 6px;
+      padding: 7px 10px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      outline: none;
+    }
+
+    .reader-sidebar-search input::placeholder {
+      color: var(--ink-3);
+    }
+
+    .reader-sidebar > section {
+      margin: 0 !important;
+      border: 0 !important;
+      border-bottom: 0.5px solid var(--rule) !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      padding: 14px 18px 16px !important;
+    }
+
+    .reader-highlights-panel .grid.grid-cols-2 button,
+    .reader-navigation-panel button,
+    .reader-stage .reader-topbar-actions a,
+    .reader-sidebar .reader-sidebar-tab {
+      font-family: 'DM Mono', monospace !important;
+      font-size: 10px !important;
+      font-weight: 300 !important;
+      letter-spacing: 0.08em !important;
+    }
+
+    .reader-highlights-panel .grid.grid-cols-2 button {
+      min-height: 30px;
+      border-radius: 0 !important;
+      padding: 0 12px !important;
+      background: var(--paper-bg-2) !important;
+      border: 0.5px solid var(--rule) !important;
+      color: var(--ink) !important;
+      box-shadow: none !important;
+    }
+
+    .reader-highlights-panel .grid.grid-cols-2 button[class*='bg-cyan-500/20'] {
+      background: var(--paper-bg) !important;
+      border-color: var(--accent) !important;
+      color: var(--ink) !important;
+    }
+
+    .reader-navigation-panel .flex.items-center.gap-2 > button,
+    .reader-navigation-panel .min-w-24 {
+      border-radius: 0 !important;
+      background: var(--paper-bg) !important;
+      border-color: var(--rule) !important;
+      font-family: 'DM Mono', monospace !important;
+      font-size: 10px !important;
+    }
+
+    .reader-sidebar > section[data-testid='notes-sidebar'] {
+      order: 1;
+    }
+
+    .reader-sidebar > section.reader-highlights-panel {
+      order: 2;
+    }
+
+    .reader-sidebar > section.reader-status-panel {
+      order: 3;
+    }
+
+    .reader-sidebar > section.reader-document-panel {
+      order: 4;
+    }
+
+    .reader-sidebar > section.reader-navigation-panel {
+      order: 5;
+    }
+
+    .reader-sidebar > section.reader-zoom-panel {
+      order: 6;
+      border-bottom: 0 !important;
+    }
+
+    .reader-sidebar .text-slate-500,
+    .reader-sidebar .text-slate-400,
+    .reader-sidebar .text-slate-300 {
+      color: var(--ink-3) !important;
+    }
+
+    .reader-sidebar .text-slate-200,
+    .reader-sidebar .text-slate-100,
+    .reader-stage .text-slate-200,
+    .reader-stage .text-slate-100 {
+      color: var(--ink) !important;
+    }
+
+    .reader-sidebar p.text-xs.uppercase,
+    .reader-sidebar p.text-[10px].uppercase {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px !important;
+      font-weight: 300;
+      letter-spacing: 0.09em !important;
+      color: var(--ink-3) !important;
+      text-transform: lowercase;
+    }
+
+    .reader-sidebar button,
+    .reader-sidebar select,
+    .reader-sidebar textarea,
+    .reader-sidebar input {
+      font-family: 'DM Mono', monospace !important;
+    }
+
+    .reader-sidebar button:not([aria-label='Delete highlight']):not([aria-label='Delete note']) {
+      border-color: var(--rule) !important;
+      background: var(--paper) !important;
+      color: var(--ink) !important;
+      box-shadow: none !important;
+    }
+
+    .reader-sidebar button[aria-label='Delete highlight'],
+    .reader-sidebar button[aria-label='Delete note'] {
+      color: var(--ink-3) !important;
+    }
+
+    .reader-sidebar [data-testid='notes-sidebar'] ul {
+      gap: 0 !important;
+    }
+
+    .reader-sidebar [data-testid='notes-sidebar'] li {
+      padding: 0;
+      border-bottom: 0.5px solid var(--rule);
+    }
+
+    .reader-sidebar [data-testid='notes-sidebar'] li:last-child {
+      border-bottom: 0;
+    }
+
+    .reader-sidebar [data-testid='notes-sidebar'] li > button:first-child {
+      width: 100%;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      padding: 14px 0 !important;
+    }
+
+    .reader-sidebar [data-testid='notes-sidebar'] li > button:first-child:hover {
+      background: transparent !important;
+    }
+
+    .reader-sidebar [data-testid='notes-sidebar'] li > button:first-child p {
+      border-left: 1.5px solid var(--paper-bg-3);
+      padding-left: 9px;
+      margin-top: 8px !important;
+      color: var(--ink-2) !important;
+      font-style: italic;
+      font-family: 'Lora', Georgia, serif !important;
+    }
+
+    .reader-sidebar [data-testid='notes-sidebar'] li > button:first-child span.text-sm {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px !important;
+      font-weight: 300;
+      color: var(--ink) !important;
+      white-space: normal;
+      line-height: 1.65;
+    }
+
+    .reader-sidebar [data-testid='notes-sidebar'] li > button:first-child .rounded-full {
+      background: transparent !important;
+      padding: 0 !important;
+      font-family: 'DM Mono', monospace;
+      font-size: 9px !important;
+      font-weight: 300;
+      letter-spacing: 0.08em;
+      color: var(--ink-3) !important;
+      text-transform: lowercase;
+    }
+
+    .reader-sidebar .reader-status-panel .inline-flex.rounded-full,
+    .reader-sidebar .reader-document-panel .inline-flex.rounded-full,
+    .reader-sidebar .reader-navigation-panel .inline-flex.rounded-full,
+    .reader-sidebar .reader-zoom-panel .inline-flex.rounded-full {
+      border-radius: 999px;
+    }
+
+    .reader-sidebar textarea,
+    .reader-sidebar [aria-label='Note content'] {
+      background: transparent !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      color: var(--ink) !important;
+      box-shadow: none !important;
+      resize: none;
+    }
+
+    .reader-sidebar [aria-label='Note content']::placeholder {
+      color: var(--ink-3) !important;
+    }
+
+    .reader-sidebar .note-item,
+    .reader-sidebar .note-item * {
+      font-family: 'DM Mono', monospace !important;
+    }
+
+    .reader-sidebar .rounded-2xl,
+    .reader-stage .rounded-3xl {
+      border-radius: 12px !important;
+    }
+
+    .reader-sidebar .border-slate-800,
+    .reader-sidebar .border-slate-700,
+    .reader-stage .border-slate-800,
+    .reader-stage .border-slate-700 {
+      border-color: var(--rule) !important;
+    }
+
+    .reader-sidebar .bg-slate-950\/70,
+    .reader-sidebar .bg-slate-950\/60,
+    .reader-sidebar .bg-slate-900\/70,
+    .reader-sidebar .bg-slate-900\/60,
+    .reader-sidebar .bg-slate-900\/80,
+    .reader-sidebar .bg-slate-800\/70,
+    .reader-stage .bg-slate-950\/70,
+    .reader-stage .bg-slate-900\/60,
+    .reader-stage .bg-slate-900\/70 {
+      background: var(--paper) !important;
+    }
+
+    /* ── Sidebar paper sections ─────────────── */
+    .reader-sidebar section {
+      padding: 0;
+      overflow-y: auto;
+    }
+
+    .reader-highlights-panel {
+      border-bottom: 0.5px solid var(--rule);
+      padding: 12px 18px;
+      flex-shrink: 0;
+    }
+
+    .reader-notes-panel {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .paper-notes-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px 8px;
+      flex-shrink: 0;
+    }
+
+    .paper-sidebar-section-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 300;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      margin: 0 0 8px;
+    }
+
+    .paper-notes-header .paper-sidebar-section-label {
+      margin-bottom: 0;
+    }
+
+    .paper-sidebar-empty {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 300;
+      color: var(--ink-3);
+      margin: 0;
+    }
+
+    .paper-highlight-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+
+    .paper-highlight-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 300;
+      color: var(--ink-2);
+      padding: 4px 0;
+      border-bottom: 0.5px solid var(--rule);
+    }
+    .paper-highlight-item:last-child { border-bottom: 0; }
+    .paper-highlight-item > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .paper-hl-note-btn {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 300;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      background: transparent;
+      border: 0.5px solid var(--accent);
+      border-radius: 4px;
+      padding: 2px 6px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .paper-hl-del-btn {
+      font-size: 9px;
+      color: var(--ink-3);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 2px 4px;
+      flex-shrink: 0;
+    }
+    .paper-hl-del-btn:hover { color: #c44040; }
+
+    .paper-add-note-btn {
+      font-size: 9px !important;
+      padding: 4px 10px !important;
+    }
+
+    .paper-note-group-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 300;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      padding: 10px 18px 4px;
+      margin: 0;
+    }
+
+    .paper-note-item {
+      border-bottom: 0.5px solid var(--rule);
+      padding: 12px 18px;
+      transition: background 0.12s;
+    }
+    .paper-note-item:hover { background: var(--paper); }
+
+    .paper-note-loc {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+
+    .paper-note-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 300;
+      letter-spacing: 0.08em;
+      color: var(--ink-3);
+    }
+
+    .paper-note-quote {
+      font-size: 11px;
+      font-style: italic;
+      color: var(--ink-2);
+      border-left: 1.5px solid var(--paper-3);
+      padding-left: 8px;
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .paper-note-body-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .paper-note-body-btn {
+      flex: 1;
+      text-align: left;
+      background: transparent;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      color: inherit;
+    }
+
+    .paper-note-body {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 300;
+      line-height: 1.65;
+      color: var(--ink);
+    }
+
+    .paper-note-del {
+      font-size: 10px;
+      color: var(--ink-3);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 2px 4px;
+      flex-shrink: 0;
+    }
+    .paper-note-del:hover { color: #c44040; }
+
+    .reader-sidebar .text-cyan-100,
+    .reader-sidebar .text-amber-300,
+    .reader-sidebar .text-emerald-300,
+    .reader-sidebar .text-rose-300,
+    .reader-topbar .text-cyan-100 {
+      color: var(--ink) !important;
+    }
+
+    .reader-sidebar .ring-cyan-400\/30,
+    .reader-sidebar .focus\:ring-cyan-400\/20 {
+      box-shadow: none !important;
+    }
+
+    .reader-sidebar input[type='range'] {
+      accent-color: var(--accent);
+    }
+
+    @media (max-width: 1100px) {
+      .reader-workspace {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .reader-sidebar {
+        border-left: 0 !important;
+        border-top: 0.5px solid var(--rule) !important;
+      }
+
+      .reader-stage {
+        padding: 14px 16px;
+      }
+
+      .reader-stage-card {
+        height: auto;
+        min-height: 60vh;
+      }
+
+      .reader-topbar {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 8px 14px;
+      }
+
+      .reader-topbar-center {
+        order: 3;
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .reader-topbar-right {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
 </svelte:head>
 
-<main class="mx-auto min-h-screen max-w-7xl px-6 py-8">
-  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-    <div>
-      <p class="text-sm uppercase tracking-[0.28em] text-cyan-300">PDF reader</p>
-      <h1 class="mt-2 text-3xl font-semibold text-white">{documentTitle}</h1>
-      <p class="mt-2 text-sm text-slate-400">{authorsLabel}</p>
+<main class="reader-shell maktaba-paper">
+  <header class="reader-topbar">
+    <div class="reader-topbar-left">
+      <a href="/library" class="reader-wordmark">maktaba</a>
+      <nav class="reader-nav" aria-label="Primary">
+        <a href="/library" class="reader-nav-link">library</a>
+        <span class="reader-nav-link active">reading</span>
+      </nav>
     </div>
 
-    <div class="flex items-center gap-3">
-      <a
-        href="/library"
-        class="rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
-      >
-        Back to library
-      </a>
-      <a
-        href={data.fileUrl}
-        target="_blank"
-        rel="noreferrer"
-        class="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-300/15"
-      >
-        Open original PDF
-      </a>
+    <div class="reader-topbar-center">
+      <span class="tb-label">{readingProgressLabel}</span>
+      <div class="tb-progress-track"><div class="tb-progress-fill" style={`width:${readingProgressPercent}%`}></div></div>
+      <span class="tb-label">{readingProgressPercent}%</span>
+      {#if jobStatus !== 'ready'}
+        <span class="tb-status tb-status--{jobStatus}">{jobStatusLabel}</span>
+      {/if}
     </div>
-  </div>
 
-  <div class="grid gap-6 grid-cols-[17rem_minmax(0,1fr)]">
-    <aside class="sticky top-6 h-[calc(100vh-3rem)] space-y-4 overflow-auto rounded-3xl border border-slate-700/80 bg-slate-950/70 p-5 shadow-2xl shadow-cyan-950/10">
-      <section class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Status</p>
-            <p class="mt-1 text-sm text-slate-200">{statusMessage}</p>
-          </div>
-          <span
-            class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${
-              jobStatus === 'ready'
-                ? 'bg-emerald-500/15 text-emerald-300'
-                : jobStatus === 'processing'
-                  ? 'bg-amber-500/15 text-amber-300'
-                  : 'bg-rose-500/15 text-rose-300'
-            }`}
-          >
-            {jobStatusLabel}
-          </span>
+    <div class="reader-topbar-right">
+      <!-- sr-only for tests -->
+      <span class="sr-only">
+        {#if highlightMode === 'text'}Select text directly in the PDF to save a highlight.{:else}Click and drag over the PDF to draw a highlight box.{/if}
+      </span>
+
+      <!-- Highlight mode dropdown -->
+      <details class="tb-menu">
+        <summary class="tb-summary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+          {highlightMode === 'text' ? 'Select text' : 'Draw box'}
+        </summary>
+        <div class="tb-dropdown">
+          <button class="tb-dropdown-item" class:tb-active={highlightMode === 'text'} on:click={() => setHighlightMode('text')}>Select text</button>
+          <button class="tb-dropdown-item" class:tb-active={highlightMode === 'draw'} on:click={() => setHighlightMode('draw')}>Draw box</button>
         </div>
-        <p class="text-xs text-slate-400">{jobCountLabel}</p>
-      </section>
+      </details>
 
-      <section class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Document</p>
-        <dl class="space-y-3 text-sm text-slate-300">
-          <div class="flex items-start justify-between gap-3 border-t border-slate-800 pt-3 first:border-t-0 first:pt-0">
-            <dt class="text-slate-500">Format</dt>
-            <dd class="text-right text-slate-100">{(data.document.format || 'pdf').toUpperCase()}</dd>
-          </div>
-          <div class="flex items-start justify-between gap-3 border-t border-slate-800 pt-3">
-            <dt class="text-slate-500">Pages</dt>
-            <dd class="text-right text-slate-100">{data.document.page_count ?? totalPages ?? '—'}</dd>
-          </div>
-          <div class="flex items-start justify-between gap-3 border-t border-slate-800 pt-3">
-            <dt class="text-slate-500">Current page</dt>
-            <dd class="text-right text-slate-100">{pageDisplay}</dd>
-          </div>
-          <div class="flex items-start justify-between gap-3 border-t border-slate-800 pt-3">
-            <dt class="text-slate-500">Zoom</dt>
-            <dd class="text-right text-slate-100">{zoomDisplay}</dd>
-          </div>
-        </dl>
-      </section>
+      <!-- Page navigation -->
+      <div class="tb-nav">
+        <button class="tb-nav-btn" type="button" disabled={currentPage <= 1} on:click={goToPreviousPage} aria-label="Previous page">‹</button>
+        <span class="tb-label tb-nav-page">{pageDisplay}</span>
+        <button class="tb-nav-btn" type="button" disabled={currentPage >= totalPages} on:click={goToNextPage} aria-label="Next page">›</button>
+      </div>
 
-      <section class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Page navigation</p>
-        <div class="flex items-center gap-2">
-          <button
-            class="flex-1 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-200 transition disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={currentPage <= 1}
-            on:click={goToPreviousPage}
-          >
-            Previous
-          </button>
-          <div class="min-w-24 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-center text-sm text-slate-100">
-            {pageDisplay}
+      <!-- Zoom dropdown -->
+      <details class="tb-menu">
+        <summary class="tb-summary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg>
+          {zoomDisplay}
+        </summary>
+        <div class="tb-dropdown tb-dropdown--right">
+          <button class="tb-dropdown-item" class:tb-active={zoomMode === 'fit-width'} on:click={setFitWidth}>Fit width</button>
+          <button class="tb-dropdown-item" class:tb-active={zoomMode === 'fit-page'} on:click={setFitPage}>Fit page</button>
+          <div class="tb-dropdown-divider"></div>
+          <div class="tb-slider-row">
+            <button class="tb-slider-btn" type="button" aria-label="Zoom out" on:click={zoomOut}>−</button>
+            <input class="tb-slider" type="range" min={MIN_ZOOM * 100} max={MAX_ZOOM * 100} step="5"
+              value={Math.round((zoomMode === 'custom' ? customZoom : currentScale) * 100)}
+              on:input={handleZoomInput} aria-label="Zoom level"
+            />
+            <button class="tb-slider-btn" type="button" aria-label="Zoom in" on:click={zoomIn}>+</button>
           </div>
-          <button
-            class="flex-1 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-slate-200 transition disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={currentPage >= totalPages}
-            on:click={goToNextPage}
-          >
-            Next
-          </button>
         </div>
-        <p class="text-xs text-slate-500">Pages scroll continuously. Previous/Next jumps to the nearest page boundary.</p>
-      </section>
+      </details>
 
-      <section class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <div class="flex items-center justify-between gap-3">
-          <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Highlights</p>
-          <span class="rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-400">
-            {highlightMode === 'text' ? 'Text select' : 'Draw box'}
-          </span>
-        </div>
+      <a class="tb-link" href={data.fileUrl} target="_blank" rel="noreferrer">↗ pdf</a>
+    </div>
+  </header>
 
-        <div class="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            class={`rounded-lg px-3 py-2 text-sm transition ${
-              highlightMode === 'text'
-                ? 'bg-cyan-500/20 text-cyan-100 ring-1 ring-cyan-400/30'
-                : 'border border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-500'
-            }`}
-            on:click={() => setHighlightMode('text')}
-          >
-            Select text
-          </button>
-          <button
-            type="button"
-            class={`rounded-lg px-3 py-2 text-sm transition ${
-              highlightMode === 'draw'
-                ? 'bg-cyan-500/20 text-cyan-100 ring-1 ring-cyan-400/30'
-                : 'border border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-500'
-            }`}
-            on:click={() => setHighlightMode('draw')}
-          >
-            Draw box
-          </button>
-        </div>
+  <div class="reader-workspace">
+    <aside class="reader-sidebar paper-sidebar">
+      <div class="paper-sidebar-tabs reader-sidebar-tabs">
+        <span class="paper-tab active">notes</span>
+        <span class="paper-tab">highlights</span>
+        <span class="paper-tab">reader</span>
+      </div>
+      <div class="paper-search reader-sidebar-search">
+        <input type="search" placeholder="search notes…" aria-label="Search notes" />
+      </div>
 
-        {#if highlightMode === 'text'}
-          <p class="text-sm text-slate-400">Select text directly in the PDF to save a highlight.</p>
-        {:else}
-          <p class="text-sm text-slate-400">Click and drag over the PDF to draw a highlight box.</p>
-        {/if}
+      <section class="reader-highlights-panel">
+        <p class="paper-sidebar-section-label">Highlights</p>
 
         {#if currentPageHighlights.length === 0}
-          <p class="text-xs text-slate-500">No highlights on this page.</p>
+          <p class="paper-sidebar-empty">No highlights on this page.</p>
         {:else}
-          <ul class="space-y-1.5">
+          <ul class="paper-highlight-list">
             {#each currentPageHighlights as h, i (h.id ?? i)}
-              <li class="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 py-1.5 text-xs text-slate-300">
+              <li class="paper-highlight-item">
                 <span class="min-w-0 flex-1 truncate">{h.extracted_text || '(no text extracted)'}</span>
                 <button
                   type="button"
-                  class="shrink-0 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-300/15"
+                  class="paper-hl-note-btn"
                   aria-label={getPrimaryNoteForHighlight(h.id) ? 'Edit highlight note' : 'Add highlight note'}
                   on:click={() => void openHighlightNoteEditor(h.id, undefined, 'sidebar')}
                 >
-                  Note
+                  note
                 </button>
                 <button
                   type="button"
-                  class="shrink-0 text-slate-500 transition hover:text-rose-400"
+                  class="paper-hl-del-btn"
                   aria-label="Delete highlight"
                   on:click={() => promptDeleteHighlight(h)}
                 >✕</button>
@@ -1073,23 +1875,26 @@
         {/if}
       </section>
 
-      <section class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <div class="flex items-center justify-between gap-3">
-          <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Notes</p>
+      <section data-testid="notes-sidebar" class="reader-notes-panel">
+        <div class="paper-notes-header">
+          <p class="paper-sidebar-section-label">Notes</p>
           <button
             type="button"
-            class="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-300/15"
+            class="paper-btn-accent paper-add-note-btn"
             on:click={() => void openDocumentNoteEditor()}
           >
             Add note
-          </button>
-        </div>
+        </button>
+      </div>
 
         {#if activeNoteTarget?.kind === 'document'}
           <NoteEditor
             placement="sidebar"
             initialContent={activeNoteRecord?.content ?? ''}
             highlight={null}
+            onChange={(value) => {
+              noteDraft = value;
+            }}
             onSave={saveFromEditor}
             onClose={() => closeNoteEditor()}
             bind:this={noteEditorRef}
@@ -1099,6 +1904,9 @@
             placement="sidebar"
             initialContent={activeNoteRecord?.content ?? ''}
             highlight={activeNoteTarget.highlight}
+            onChange={(value) => {
+              noteDraft = value;
+            }}
             onSave={saveFromEditor}
             onClose={() => closeNoteEditor()}
             bind:this={noteEditorRef}
@@ -1110,134 +1918,58 @@
         {:else if notesError}
           <p class="text-xs text-rose-300">{notesError}</p>
         {:else if noteSidebarGroups.documentNotes.length === 0 && noteSidebarGroups.pageGroups.length === 0}
-          <p class="text-xs text-slate-500">No notes yet.</p>
+          <p class="paper-sidebar-empty">No notes yet.</p>
         {:else}
           {#if noteSidebarGroups.documentNotes.length > 0}
-            <div class="space-y-2">
-              <p class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Document notes</p>
-              <ul class="space-y-2">
-                {#each noteSidebarGroups.documentNotes as note (note.id)}
-                  <li class="flex items-center gap-2">
-                    <button
-                      type="button"
-                      class="flex-1 w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-left transition hover:border-slate-600 hover:bg-slate-900"
-                      on:click={() => handleSidebarNoteClick(note)}
-                    >
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="min-w-0 flex-1 truncate text-sm text-slate-100">{note.content || '(empty note)'}</span>
-                        <span class="shrink-0 rounded-full bg-slate-800 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                          Standalone
-                        </span>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      class="shrink-0 text-slate-500 transition hover:text-rose-400"
-                      aria-label="Delete note"
-                      on:click={() => handleNoteDelete(note)}
-                    >✕</button>
-                  </li>
-                {/each}
-              </ul>
-            </div>
+            <p class="paper-note-group-label">Document notes</p>
+            {#each noteSidebarGroups.documentNotes as note (note.id)}
+              <div class="paper-note-item">
+                <div class="paper-note-loc"><span class="paper-note-label">standalone</span></div>
+                <div class="paper-note-body-row">
+                  <button type="button" class="paper-note-body-btn" on:click={() => handleSidebarNoteClick(note)}>
+                    <div class="paper-note-body">{note.content || '(empty note)'}</div>
+                  </button>
+                  <button type="button" class="paper-note-del" aria-label="Delete note" on:click={() => handleNoteDelete(note)}>✕</button>
+                </div>
+              </div>
+            {/each}
           {/if}
 
           {#each noteSidebarGroups.pageGroups as group (group.pageNumber)}
-            <div class="space-y-2">
-              <p class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Page {group.pageNumber}</p>
-              <ul class="space-y-2">
-                {#each group.notes as note (note.id)}
-                  <li class="flex items-center gap-2">
-                    <button
-                      type="button"
-                      class="flex-1 w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-left transition hover:border-slate-600 hover:bg-slate-900"
-                      on:click={() => handleSidebarNoteClick(note)}
-                    >
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="min-w-0 flex-1 truncate text-sm text-slate-100">{note.content || '(empty note)'}</span>
-                        <span class="shrink-0 rounded-full bg-slate-800 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                          {note.highlight_id ? 'Highlight' : 'Page'}
-                        </span>
-                      </div>
-                      {#if note.highlight?.extracted_text}
-                        <p class="mt-1 text-xs text-slate-500">{note.highlight.extracted_text}</p>
-                      {/if}
-                    </button>
-                    <button
-                      type="button"
-                      class="shrink-0 text-slate-500 transition hover:text-rose-400"
-                      aria-label="Delete note"
-                      on:click={() => handleNoteDelete(note)}
-                    >✕</button>
-                  </li>
-                {/each}
-              </ul>
-            </div>
+            <p class="paper-note-group-label">Page {group.pageNumber}</p>
+            {#each group.notes as note (note.id)}
+              <div class="paper-note-item">
+                {#if note.highlight?.extracted_text}
+                  <div class="paper-note-quote">&ldquo;{note.highlight.extracted_text}&rdquo;</div>
+                {/if}
+                <div class="paper-note-body-row">
+                  <button type="button" class="paper-note-body-btn" on:click={() => handleSidebarNoteClick(note)}>
+                    <div class="paper-note-body">{note.content || '(empty note)'}</div>
+                  </button>
+                  <button type="button" class="paper-note-del" aria-label="Delete note" on:click={() => handleNoteDelete(note)}>✕</button>
+                </div>
+              </div>
+            {/each}
           {/each}
         {/if}
       </section>
 
-      <section class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Zoom</p>
-        <div class="grid grid-cols-2 gap-2">
-          <button
-            class={`rounded-lg px-3 py-2 text-sm transition ${
-              zoomMode === 'fit-width'
-                ? 'bg-cyan-500/20 text-cyan-100 ring-1 ring-cyan-400/30'
-                : 'border border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-500'
-            }`}
-            on:click={setFitWidth}
-          >
-            Fit width
-          </button>
-          <button
-            class={`rounded-lg px-3 py-2 text-sm transition ${
-              zoomMode === 'fit-page'
-                ? 'bg-cyan-500/20 text-cyan-100 ring-1 ring-cyan-400/30'
-                : 'border border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-500'
-            }`}
-            on:click={setFitPage}
-          >
-            Fit page
-          </button>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <button
-            class="rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-lg leading-none text-slate-100 transition hover:border-slate-500"
-            aria-label="Zoom out"
-            on:click={zoomOut}
-          >
-            −
-          </button>
-          <input
-            class="w-full accent-cyan-300"
-            type="range"
-            min={MIN_ZOOM * 100}
-            max={MAX_ZOOM * 100}
-            step="5"
-            value={Math.round((zoomMode === 'custom' ? customZoom : currentScale) * 100)}
-            on:input={handleZoomInput}
-          />
-          <button
-            class="rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-lg leading-none text-slate-100 transition hover:border-slate-500"
-            aria-label="Zoom in"
-            on:click={zoomIn}
-          >
-            +
-          </button>
-        </div>
-      </section>
     </aside>
 
-    <section class="rounded-3xl border border-slate-700/80 bg-slate-950/70 shadow-2xl shadow-cyan-950/10">
-      <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4 text-sm text-slate-400">
-        <div>{documentTitle}</div>
-        <div>{pageDisplay}</div>
+    <section class="reader-stage">
+      <div class="reader-meta">
+        <p class="reader-kicker">PDF reader</p>
+        <h1 class="reader-title">{documentTitle}</h1>
+        <p class="reader-authors">{authorsLabel}</p>
       </div>
 
-      <div class="p-4">
-        <div bind:this={pdfViewerHostEl} class="reader-pdf-shell relative h-[72vh] overflow-hidden rounded-2xl bg-slate-900/60">
+      <div class="reader-stage-card rounded-3xl border border-slate-700/80 bg-slate-950/70 shadow-2xl shadow-cyan-950/10">
+        <div class="reader-stage-header flex items-center justify-between border-b border-slate-800 px-5 py-4 text-sm text-slate-400">
+          <div>{documentTitle}</div>
+          <div>{pageDisplay}</div>
+        </div>
+        <div class="reader-stage-body">
+        <div bind:this={pdfViewerHostEl} class="reader-pdf-shell relative h-full overflow-hidden rounded-2xl bg-slate-900/60">
           {#if browser}
             {#if error}
               <div class="flex h-full items-center justify-center p-6">
@@ -1284,6 +2016,7 @@
               Loading reader…
             </div>
           {/if}
+        </div>
         </div>
       </div>
     </section>
