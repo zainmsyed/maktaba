@@ -14,6 +14,8 @@
     localId?: string;
     uploading?: boolean;
     error?: string;
+    highlight_count?: number;
+    note_count?: number;
   }
 
   let documents: DocWithJobs[] = [];
@@ -49,7 +51,12 @@
         throw new Error(`HTTP ${resp.status}`);
       }
       const payload = await resp.json();
-      documents = (payload.documents || []).map((item: any) => ({ document: item.document ?? item, jobs: item.jobs ?? [] }));
+      documents = (payload.documents || []).map((item: any) => ({
+        document: item.document ?? item,
+        jobs: item.jobs ?? [],
+        highlight_count: item.highlight_count ?? 0,
+        note_count: item.note_count ?? 0,
+      }));
     } catch (e) {
       if (!silent) {
         error = e instanceof Error ? e.message : String(e);
@@ -90,6 +97,38 @@
     if (status === 'processing') return 'amber';
     if (status === 'failed') return 'rose';
     return 'emerald';
+  }
+
+  function progressLabel(entry: DocWithJobs) {
+    if (entry.uploading) return 'Uploading…';
+    if (entry.error) return 'Upload failed';
+    const status = jobStatus(entry.jobs);
+    if (status === 'processing') return 'Extracting…';
+    if (status === 'failed') return 'Needs attention';
+    const pageCount = Number(entry.document?.page_count ?? 0);
+    return pageCount > 0 ? `${pageCount} pages` : 'Open to read';
+  }
+
+  function progressWidth(entry: DocWithJobs) {
+    if (entry.uploading) return 24;
+    if (entry.error) return 14;
+    const status = jobStatus(entry.jobs);
+    if (status === 'processing') return 42;
+    if (status === 'failed') return 18;
+    const pageCount = Number(entry.document?.page_count ?? 0);
+    if (pageCount > 0) {
+      return Math.min(100, Math.max(36, pageCount * 8));
+    }
+    return entry.document?.format?.toLowerCase() === 'epub' ? 82 : 68;
+  }
+
+  function humanFormatDate(iso: string | undefined) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString();
+    } catch {
+      return iso;
+    }
   }
 
   // derive a sorted array reactively so Svelte change detection is reliable
@@ -246,18 +285,96 @@
           {#each sortedDocuments as entry, index (entry.document.id ?? entry.localId)}
             {#if readerHref(entry.document)}
               <a href={readerHref(entry.document)} class="book-card">
-                <div class={`book-cover ${coverClass(index)} ${statusTone(entry)}`}>
-                  <div class="cover-noise"></div>
-                  <span class="format-badge">{(entry.document.format || '').toUpperCase() || 'PDF'}</span>
-                  <span class="cover-title">{entry.document.title ?? 'Untitled'}</span>
+                <div class="book-card-body">
+                  <div class="book-card-head">
+                    <h2 class="book-card-title">{entry.document.title ?? 'Untitled'}</h2>
+                    {#if statusTone(entry) === 'emerald'}
+                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    {:else if statusTone(entry) === 'amber'}
+                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                    {:else if statusTone(entry) === 'rose'}
+                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    {/if}
+                  </div>
+                  <p class="book-card-author">
+                    {#if entry.document.authors && entry.document.authors.length > 0}
+                      {entry.document.authors.join(', ')}
+                    {:else}
+                      Unknown author
+                    {/if}
+                  </p>
+                  <div class="book-progress-row">
+                    <div class="book-prog-bar">
+                      <div class={`book-prog-fill ${statusTone(entry)}`} style={`width: ${progressWidth(entry)}%`}></div>
+                    </div>
+                    <span class="book-prog-label">{progressLabel(entry)}</span>
+                  </div>
+                  <div class="book-card-footer">
+                    <span class="book-card-date">{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</span>
+                  </div>
+                  {#if entry.highlight_count || entry.note_count}
+                    <div class="book-card-stats">
+                      {#if entry.highlight_count}
+                        <span class="book-stat" title="{entry.highlight_count} highlights">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/><path d="M15 3h6v6"/></svg>
+                          {entry.highlight_count}
+                        </span>
+                      {/if}
+                      {#if entry.note_count}
+                        <span class="book-stat" title="{entry.note_count} notes">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                          {entry.note_count}
+                        </span>
+                      {/if}
+                    </div>
+                  {/if}
                 </div>
               </a>
             {:else}
               <article class="book-card">
-                <div class={`book-cover ${coverClass(index)} ${statusTone(entry)}`}>
-                  <div class="cover-noise"></div>
-                  <span class="format-badge">{(entry.document.format || '').toUpperCase() || 'PDF'}</span>
-                  <span class="cover-title">{entry.document.title ?? 'Untitled'}</span>
+                <div class="book-card-body">
+                  <div class="book-card-head">
+                    <h2 class="book-card-title">{entry.document.title ?? 'Untitled'}</h2>
+                    {#if statusTone(entry) === 'emerald'}
+                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    {:else if statusTone(entry) === 'amber'}
+                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                    {:else if statusTone(entry) === 'rose'}
+                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    {/if}
+                  </div>
+                  <p class="book-card-author">
+                    {#if entry.document.authors && entry.document.authors.length > 0}
+                      {entry.document.authors.join(', ')}
+                    {:else}
+                      Unknown author
+                    {/if}
+                  </p>
+                  <div class="book-progress-row">
+                    <div class="book-prog-bar">
+                      <div class={`book-prog-fill ${statusTone(entry)}`} style={`width: ${progressWidth(entry)}%`}></div>
+                    </div>
+                    <span class="book-prog-label">{progressLabel(entry)}</span>
+                  </div>
+                  <div class="book-card-footer">
+                    <span class="book-card-date">{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</span>
+                  </div>
+                  {#if entry.highlight_count || entry.note_count}
+                    <div class="book-card-stats">
+                      {#if entry.highlight_count}
+                        <span class="book-stat" title="{entry.highlight_count} highlights">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/><path d="M15 3h6v6"/></svg>
+                          {entry.highlight_count}
+                        </span>
+                      {/if}
+                      {#if entry.note_count}
+                        <span class="book-stat" title="{entry.note_count} notes">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                          {entry.note_count}
+                        </span>
+                      {/if}
+                    </div>
+                  {/if}
                 </div>
               </article>
             {/if}
@@ -285,11 +402,6 @@
     font-family: 'Lora', Georgia, serif;
     color-scheme: light;
     background: linear-gradient(180deg, #f7f4ee 0%, #e8e5de 100%);
-  }
-
-  .library-page {
-    min-height: 100vh;
-    padding: 0;
   }
 
   .library-shell {
@@ -402,7 +514,7 @@
 
   .library-view {
     flex: 1;
-    padding: 30px clamp(18px, 3vw, 40px) 40px;
+    padding: 22px clamp(18px, 3vw, 40px) 30px;
   }
 
   .library-header {
@@ -410,7 +522,7 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
-    margin: 0 auto 22px;
+    margin: 0 auto 16px;
     max-width: 1280px;
   }
 
@@ -467,7 +579,8 @@
   }
 
   .book-card {
-    display: block;
+    display: flex;
+    flex-direction: column;
     border-radius: 12px;
     overflow: hidden;
     background: rgba(250, 248, 244, 0.95);
@@ -476,6 +589,7 @@
     transition: transform 0.15s, box-shadow 0.15s;
     text-decoration: none;
     color: inherit;
+    min-height: 168px;
   }
 
   .book-card:hover {
@@ -483,49 +597,120 @@
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
   }
 
-  .book-cover {
-    position: relative;
-    aspect-ratio: 2 / 3;
-    padding: 14px 12px;
+  .book-card-body {
     display: flex;
-    align-items: flex-end;
-    overflow: hidden;
-    color: rgba(255, 255, 255, 0.92);
+    flex-direction: column;
+    gap: 5px;
+    padding: 14px;
+    flex: 1;
+    justify-content: space-between;
   }
 
-  .cover-noise {
-    position: absolute;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
-    opacity: 0.16;
-    mix-blend-mode: screen;
+  .book-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
   }
 
-  .format-badge {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    padding: 3px 6px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 4px;
-    font-family: var(--font-serif);
-    font-size: 8px;
-    letter-spacing: 0.08em;
-    color: rgba(255, 255, 255, 0.72);
-  }
-
-  .cover-title {
-    position: relative;
-    z-index: 1;
-    font-size: 12px;
+  .book-card-title {
+    margin: 0;
+    font-size: 14px;
     line-height: 1.35;
     font-weight: 500;
+    color: #1a1814;
+    min-height: 2.4em;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
-  .cover-1 { background: linear-gradient(145deg, #2c3e50, #1a252f); }
-  .cover-2 { background: linear-gradient(145deg, #8b4513, #5c2d0a); }
-  .cover-3 { background: linear-gradient(145deg, #1a3a2a, #0d1f16); }
-  .cover-4 { background: linear-gradient(145deg, #2d1b4e, #1a0f2e); }
+  .book-card-author {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 11px;
+    font-weight: 300;
+    color: #8a8680;
+  }
+
+  .status-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  .book-progress-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .book-prog-bar {
+    flex: 1;
+    height: 2px;
+    border-radius: 999px;
+    background: rgba(232, 229, 222, 0.9);
+    overflow: hidden;
+  }
+
+  .book-prog-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #b85c2e, #d99447);
+  }
+
+  .book-prog-fill.emerald {
+    background: linear-gradient(90deg, #36b37e, #65d19c);
+  }
+
+  .book-prog-fill.amber {
+    background: linear-gradient(90deg, #d97706, #f59e0b);
+  }
+
+  .book-prog-fill.rose {
+    background: linear-gradient(90deg, #e11d48, #fb7185);
+  }
+
+  .book-prog-label {
+    flex-shrink: 0;
+    font-family: var(--font-serif);
+    font-size: 9px;
+    font-weight: 300;
+    color: #8a8680;
+    white-space: nowrap;
+  }
+
+  .book-card-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .book-card-date {
+    font-family: var(--font-serif);
+    font-size: 9px;
+    font-weight: 300;
+    color: #8a8680;
+  }
+
+  .book-card-stats {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 2px;
+  }
+
+  .book-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-serif);
+    font-size: 10px;
+    font-weight: 400;
+    color: #8a8680;
+  }
 
   @media (max-width: 768px) {
     .topbar {

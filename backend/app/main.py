@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
-from sqlalchemy import delete as sa_delete, select
+from sqlalchemy import delete as sa_delete, func, select
 from pydantic import BaseModel
 
 from app.db import get_session, initialize_database
@@ -180,10 +180,29 @@ def list_documents(session: Session = Depends(get_session)) -> dict[str, object]
         for j in jobs:
             jobs_by_doc[j.document_id].append(j)
 
+    hl_counts: dict[object, int] = {}
+    note_counts: dict[object, int] = {}
+    if doc_ids:
+        hl_rows = session.exec(
+            select(Highlight.document_id, func.count(Highlight.id))
+            .where(Highlight.document_id.in_(doc_ids))
+            .group_by(Highlight.document_id)
+        ).all()
+        hl_counts = {row[0]: row[1] for row in hl_rows}
+
+        note_rows = session.exec(
+            select(Note.document_id, func.count(Note.id))
+            .where(Note.document_id.in_(doc_ids))
+            .group_by(Note.document_id)
+        ).all()
+        note_counts = {row[0]: row[1] for row in note_rows}
+
     for doc in docs:
         result.append({
             "document": _sanitize_document(doc),
             "jobs": [_sanitize_job(job) for job in jobs_by_doc.get(doc.id, [])],
+            "highlight_count": hl_counts.get(doc.id, 0),
+            "note_count": note_counts.get(doc.id, 0),
         })
     return {"documents": result}
 
