@@ -839,6 +839,9 @@
     if (typeof window !== 'undefined') {
       window.scrollTo(0, 0);
       history.scrollRestoration = 'manual';
+      try {
+        localStorage.setItem('maktaba:lastDocumentId', data.document.id);
+      } catch {}
     }
     subscribeToHighlightsStore();
     syncHighlightsStore();

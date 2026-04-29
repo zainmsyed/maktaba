@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { goto } from '$app/navigation';
 
   export let data: App.PageData;
 
@@ -21,6 +22,17 @@
   let error: string | null = null;
   let sortMode: 'last_opened' | 'date_added' | 'title' = 'date_added';
   let pollTimer: number | null = null;
+
+  function goToLastReading() {
+    try {
+      const id = localStorage.getItem('maktaba:lastDocumentId');
+      if (id) {
+        void goto('/library/' + id);
+        return;
+      }
+    } catch {}
+    void goto('/library/demo');
+  }
 
   const BLOCKING_JOB_TYPES = new Set(['extract_text', 'ocr']);
   const COVER_CLASSES = ['cover-1', 'cover-2', 'cover-3', 'cover-4'];
@@ -229,7 +241,7 @@
         <span class="wordmark">maktaba</span>
         <nav class="nav-links" aria-label="Primary">
           <a class="nav-link active" href="/library">library</a>
-          <a class="nav-link" href="/library/demo">reading</a>
+          <a class="nav-link" href="/library/demo" on:click|preventDefault={goToLastReading}>reading</a>
         </nav>
       </div>
 
