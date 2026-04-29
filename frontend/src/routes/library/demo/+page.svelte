@@ -192,12 +192,12 @@ body { margin: 0; }
 .topbar { grid-column: 1 / -1; display: flex; align-items: center; padding: 0 22px; border-bottom: 0.5px solid var(--rule); gap: 16px; background: var(--paper); }
 .wordmark { font-family: 'Lora', serif; font-size: 15px; font-weight: 500; letter-spacing: 0.07em; color: var(--ink); margin-right: 4px; }
 .nav-links { display: flex; gap: 2px; flex: 1; }
-.nav-link { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.06em; padding: 5px 10px; cursor: pointer; border-radius: 5px; transition: color 0.15s, background 0.15s; user-select: none; }
+.nav-link { font-family: var(--font-serif); font-size: 11px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.06em; padding: 5px 10px; cursor: pointer; border-radius: 5px; transition: color 0.15s, background 0.15s; user-select: none; }
 .nav-link:hover { color: var(--ink); background: var(--paper-2); }
 .nav-link.active { color: var(--ink); }
 .reader { padding: 52px 80px; overflow-y: auto; background: var(--paper); border-right: 0.5px solid var(--rule); position: relative; scroll-behavior: smooth; }
 .book-meta { margin-bottom: 32px; }
-.book-chapter { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; }
+.book-chapter { font-family: var(--font-serif); font-size: 10px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; }
 .book-title { font-size: 19px; font-weight: 500; color: var(--ink); line-height: 1.3; }
 .rule-line { height: 0.5px; background: var(--rule); margin: 24px 0; }
 .prose { font-size: 15.5px; line-height: 1.88; color: var(--ink); }
@@ -207,24 +207,24 @@ body { margin: 0; }
 .note-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); vertical-align: super; font-size: 0; margin-left: 2px; cursor: pointer; position: relative; top: -1px; }
 .sidebar { display: flex; flex-direction: column; background: var(--paper-2); overflow: hidden; }
 .sidebar-tabs { display: flex; border-bottom: 0.5px solid var(--rule); padding: 0 18px; flex-shrink: 0; background: var(--paper-2); }
-.tab { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 300; letter-spacing: 0.09em; color: var(--ink-3); padding: 14px 10px 12px; cursor: pointer; border-bottom: 1.5px solid transparent; transition: all 0.15s; user-select: none; }
+.tab { font-family: var(--font-serif); font-size: 10px; font-weight: 300; letter-spacing: 0.09em; color: var(--ink-3); padding: 14px 10px 12px; cursor: pointer; border-bottom: 1.5px solid transparent; transition: all 0.15s; user-select: none; }
 .tab.active { color: var(--ink); border-bottom-color: var(--accent); }
 .search-bar-wrap { padding: 10px 16px; border-bottom: 0.5px solid var(--rule); flex-shrink: 0; }
-.search-input { width: 100%; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 300; color: var(--ink); background: var(--paper); border: 0.5px solid var(--rule); border-radius: 6px; padding: 7px 10px; outline: none; letter-spacing: 0.02em; transition: border-color 0.15s; }
+.search-input { width: 100%; font-family: var(--font-serif); font-size: 11px; font-weight: 300; color: var(--ink); background: var(--paper); border: 0.5px solid var(--rule); border-radius: 6px; padding: 7px 10px; outline: none; letter-spacing: 0.02em; transition: border-color 0.15s; }
 .notes-list { flex: 1; overflow-y: auto; padding: 0; }
 .note-item { padding: 15px 18px; border-bottom: 0.5px solid var(--rule); cursor: pointer; transition: background 0.12s; position: relative; }
 .note-item:hover { background: var(--paper); }
 .note-item.active { background: var(--paper); }
 .note-item.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
-.note-loc { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.08em; margin-bottom: 7px; display: flex; align-items: center; gap: 4px; }
+.note-loc { font-family: var(--font-serif); font-size: 9px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.08em; margin-bottom: 7px; display: flex; align-items: center; gap: 4px; }
 .note-quote { font-size: 11.5px; line-height: 1.55; color: var(--ink-2); font-style: italic; margin-bottom: 8px; border-left: 1.5px solid var(--paper-3); padding-left: 9px; }
-.note-body { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 300; line-height: 1.65; color: var(--ink); }
+.note-body { font-family: var(--font-serif); font-size: 11px; font-weight: 300; line-height: 1.65; color: var(--ink); }
 .note-editor { border-top: 0.5px solid var(--rule); padding: 14px 18px 16px; background: var(--paper); flex-shrink: 0; }
-.editor-label { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 9px; }
+.editor-label { font-family: var(--font-serif); font-size: 9px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 9px; }
 .editor-quote { font-size: 11px; font-style: italic; color: var(--ink-2); border-left: 1.5px solid var(--accent-soft); padding-left: 9px; margin-bottom: 10px; line-height: 1.55; }
-.note-textarea { width: 100%; font-family: 'DM Mono', monospace; font-size: 11.5px; font-weight: 300; line-height: 1.7; color: var(--ink); background: transparent; border: none; outline: none; resize: none; height: 82px; }
+.note-textarea { width: 100%; font-family: var(--font-serif); font-size: 11.5px; font-weight: 300; line-height: 1.7; color: var(--ink); background: transparent; border: none; outline: none; resize: none; height: 82px; }
 .editor-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
-.save-status { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.06em; transition: opacity 0.3s; }
+.save-status { font-family: var(--font-serif); font-size: 9px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.06em; transition: opacity 0.3s; }
 .color-picks { display: flex; gap: 7px; align-items: center; }
 .cp { width: 10px; height: 10px; border-radius: 50%; cursor: pointer; border: 1.5px solid transparent; transition: transform 0.1s, border-color 0.1s; }
 .cp:hover { transform: scale(1.25); }
@@ -343,7 +343,7 @@ body { margin: 0; }
 
     <div id="panel-highlights" style="display:none;flex:1;overflow-y:auto;">
       <div style="padding:20px 18px;">
-        <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:300;color:var(--ink-3);letter-spacing:0.08em;margin-bottom:16px;">3 highlights · this chapter</div>
+        <div style="font-family:var(--font-serif);font-size:10px;font-weight:300;color:var(--ink-3);letter-spacing:0.08em;margin-bottom:16px;">3 highlights · this chapter</div>
         <div style="display:flex;flex-direction:column;gap:12px;">
           <div class="hl hl-y" id="hl1a" style="background:var(--hl-y);border-radius:4px;padding:10px 12px;font-size:12px;line-height:1.6;color:var(--ink);cursor:pointer;" data-color="y" data-hl-id="hl1" data-note-id="n1">"System 1 operates automatically and quickly, with little or no effort and no sense of voluntary control."</div>
           <div class="hl hl-g" id="hl2a" style="background:var(--hl-g);border-radius:4px;padding:10px 12px;font-size:12px;line-height:1.6;color:var(--ink);cursor:pointer;" data-color="g" data-hl-id="hl2" data-note-id="n2">"When we think of ourselves, we identify with System 2, the conscious, reasoning self..."</div>

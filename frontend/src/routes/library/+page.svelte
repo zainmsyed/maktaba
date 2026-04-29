@@ -379,7 +379,7 @@
   }
 
   .nav-link {
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     font-size: 11px;
     font-weight: 300;
     letter-spacing: 0.06em;
@@ -410,7 +410,7 @@
     border: 1px solid rgba(26, 24, 20, 0.14);
     background: rgba(242, 240, 235, 0.8);
     color: #1a1814;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     font-size: 10px;
     font-weight: 300;
     letter-spacing: 0.06em;
@@ -428,7 +428,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
   }
 
   .sort-label {
@@ -445,7 +445,7 @@
     padding: 7px 10px;
     font-size: 10px;
     font-weight: 300;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     outline: none;
   }
 
@@ -465,7 +465,7 @@
 
   .eyebrow {
     margin: 0 0 8px;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     font-size: 10px;
     font-weight: 300;
     letter-spacing: 0.12em;
@@ -482,7 +482,7 @@
 
   .library-summary {
     margin: 4px 0 0;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     font-size: 10px;
     font-weight: 300;
     letter-spacing: 0.08em;
@@ -556,7 +556,7 @@
     padding: 3px 6px;
     border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 4px;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     font-size: 8px;
     letter-spacing: 0.08em;
     color: rgba(255, 255, 255, 0.72);
@@ -599,7 +599,7 @@
 
   .book-card-author {
     margin: 0;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     font-size: 10px;
     font-weight: 300;
     color: #8a8680;
@@ -609,7 +609,7 @@
     flex-shrink: 0;
     padding: 5px 9px;
     border-radius: 999px;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     font-size: 9px;
     font-weight: 400;
     letter-spacing: 0.08em;
@@ -666,7 +666,7 @@
 
   .book-prog-label {
     flex-shrink: 0;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     font-size: 9px;
     font-weight: 300;
     color: #8a8680;
@@ -682,7 +682,7 @@
   }
 
   .book-card-date {
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     font-size: 9px;
     font-weight: 300;
     color: #8a8680;
@@ -698,7 +698,7 @@
     border: 1px solid rgba(184, 92, 46, 0.28);
     background: rgba(240, 230, 220, 0.55);
     color: #b85c2e;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-serif);
     font-size: 9px;
     font-weight: 400;
     letter-spacing: 0.08em;

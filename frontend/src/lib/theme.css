@@ -7,21 +7,21 @@
 
 /* 1. Tokens */
 :root {
-  --paper:   #faf8f4;
-  --paper-2: #f2f0eb;
-  --paper-3: #e8e5de;
+  --paper:   #fcfbf8;
+  --paper-2: #efebe3;
+  --paper-3: #ddd6c8;
   --ink:     #1a1814;
-  --ink-2:   #4a4640;
-  --ink-3:   #8a8680;
+  --ink-2:   #38342d;
+  --ink-3:   #6f6a62;
   --accent:  #b85c2e;
-  --accent-soft: #f0e6dc;
-  --rule:    rgba(26, 24, 20, 0.10);
+  --accent-soft: #e7d9cc;
+  --rule:    rgba(26, 24, 20, 0.18);
   --hl-y:    rgba(245, 210, 100, 0.38);
   --hl-g:    rgba(100, 185, 130, 0.32);
   --hl-b:    rgba(100, 150, 220, 0.30);
 
   --font-serif: 'Lora', Georgia, serif;
-  --font-mono:  'DM Mono', ui-monospace, monospace;
+  --font-mono:  'Lora', Georgia, serif;
 }
 
 /* 2. Global reset for paper pages */
@@ -111,11 +111,11 @@
   width: 100%;
   font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 300;
+  font-weight: 400;
   color: var(--ink);
-  background: var(--paper);
-  border: 0.5px solid var(--rule);
-  border-radius: 6px;
+  background: rgba(255, 253, 249, 0.92);
+  border: 1px solid rgba(26, 24, 20, 0.18);
+  border-radius: 7px;
   padding: 7px 10px;
   outline: none;
 }
@@ -164,24 +164,24 @@
 .paper-note-body {
   font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 300;
+  font-weight: 400;
   line-height: 1.65;
   color: var(--ink);
 }
 
 /* 6. Note editor (bottom of sidebar) */
 .paper-editor {
-  border-top: 0.5px solid var(--rule);
+  border-top: 1px solid var(--rule);
   padding: 14px 18px 16px;
-  background: var(--paper);
+  background: rgba(255, 252, 247, 0.92);
   flex-shrink: 0;
 }
 
 .paper-editor-label {
   font-family: var(--font-mono);
   font-size: 9px;
-  font-weight: 300;
-  color: var(--ink-3);
+  font-weight: 400;
+  color: var(--ink-2);
   letter-spacing: 0.10em;
   text-transform: uppercase;
   margin-bottom: 9px;
@@ -201,7 +201,7 @@
   width: 100%;
   font-family: var(--font-mono);
   font-size: 11.5px;
-  font-weight: 300;
+  font-weight: 400;
   line-height: 1.70;
   color: var(--ink);
   background: transparent;
@@ -214,8 +214,8 @@
 .paper-save-status {
   font-family: var(--font-mono);
   font-size: 9px;
-  font-weight: 300;
-  color: var(--ink-3);
+  font-weight: 400;
+  color: var(--ink-2);
   letter-spacing: 0.06em;
 }
 

@@ -71,12 +71,17 @@ services:
   frontend:
     build:
       context: ./frontend
+      target: dev
     restart: unless-stopped
     environment:
       PUBLIC_API_URL: "${PUBLIC_API_URL:-http://localhost:8000}"
       SERVER_API_URL: "${SERVER_API_URL:-http://backend:8000}"
       PORT: "3000"
       HOST: "0.0.0.0"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app:Z
+      - /app/node_modules
     ports:
       - "3000:3000"
     depends_on:

@@ -930,19 +930,17 @@
 
 <svelte:head>
   <title>{documentTitle} — Maktaba Reader</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
   <style>
     :root {
-      --paper-bg: #faf8f4;
-      --paper-bg-2: #f2f0eb;
-      --paper-bg-3: #e8e5de;
-      --ink: #1a1814;
-      --ink-2: #4a4640;
-      --ink-3: #8a8680;
-      --accent: #b85c2e;
-      --accent-soft: #f0e6dc;
-      --rule: rgba(26, 24, 20, 0.1);
+      --paper-bg: #fcfbf8;
+      --paper-bg-2: #e7dfd1;
+      --paper-bg-3: #cfc4b1;
+      --ink: #16130f;
+      --ink-2: #2a241d;
+      --ink-3: #5b544a;
+      --accent: #a64f25;
+      --accent-soft: #e2cfbd;
+      --rule: rgba(22, 19, 15, 0.24);
     }
 
     html,
@@ -963,7 +961,7 @@
       min-height: 100vh;
       height: 100vh;
       display: grid;
-      grid-template-rows: 46px minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
       background: var(--paper-bg);
       color: var(--ink);
       font-family: 'Lora', Georgia, serif;
@@ -974,21 +972,24 @@
       position: sticky;
       top: 0;
       z-index: 20;
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
       align-items: center;
-      gap: 12px;
-      height: 46px;
-      padding: 0 18px;
-      background: rgba(250,248,244,0.97);
-      border-bottom: 0.5px solid var(--rule);
+      gap: 16px;
+      height: 61px;
+      box-sizing: border-box;
+      padding: 14px 22px;
+      background: rgba(250, 248, 244, 0.94);
+      border-bottom: 1px solid rgba(26, 24, 20, 0.08);
       backdrop-filter: blur(8px);
     }
 
     .reader-topbar-left {
       display: flex;
       align-items: center;
-      gap: 14px;
-      flex-shrink: 0;
+      gap: 18px;
+      min-width: 0;
+      justify-self: start;
     }
 
     .reader-wordmark {
@@ -1000,43 +1001,48 @@
       text-decoration: none;
     }
 
-    .reader-nav { display: flex; gap: 2px; align-items: center; }
+    .reader-nav { display: flex; gap: 4px; align-items: center; }
 
     .reader-nav-link {
-      font-family: var(--font-mono);
+      font-family: var(--font-serif);
       font-size: 11px;
       font-weight: 300;
       letter-spacing: 0.06em;
       color: var(--ink-3);
-      padding: 5px 8px;
+      padding: 5px 10px;
       border-radius: 5px;
       text-decoration: none;
       transition: background 0.15s, color 0.15s;
     }
-    .reader-nav-link:hover, .reader-nav-link.active { color: var(--ink); background: var(--paper-2); }
+    .reader-nav-link:hover, .reader-nav-link.active {
+      color: var(--ink);
+      background: rgba(242, 240, 235, 0.9);
+    }
 
     .reader-topbar-center {
-      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
       min-width: 0;
+      justify-self: center;
     }
 
     .reader-topbar-right {
       display: flex;
       align-items: center;
-      gap: 6px;
-      flex-shrink: 0;
+      justify-content: flex-end;
+      gap: 12px;
+      min-width: 0;
+      justify-self: end;
     }
 
     /* ── Topbar atoms ───────────────────── */
     .tb-label {
       font-family: var(--font-mono);
       font-size: 10px;
-      font-weight: 300;
-      color: var(--ink-3);
+      font-weight: 400;
+      color: var(--ink-2);
       letter-spacing: 0.04em;
       white-space: nowrap;
     }
@@ -1057,12 +1063,12 @@
     .tb-summary {
       list-style: none;
       display: flex; align-items: center; gap: 5px;
-      font-family: var(--font-mono); font-size: 10px; font-weight: 300;
+      font-family: var(--font-serif); font-size: 10px; font-weight: 300;
       letter-spacing: 0.05em; color: var(--ink-3);
-      padding: 4px 9px;
-      border: 0.5px solid var(--rule); border-radius: 6px;
+      padding: 5px 9px;
+      border: 1px solid rgba(26, 24, 20, 0.12); border-radius: 8px;
       cursor: pointer; user-select: none;
-      background: transparent; white-space: nowrap;
+      background: rgba(250, 248, 244, 0.95); white-space: nowrap;
       transition: background 0.15s, color 0.15s;
     }
     .tb-summary:hover { background: var(--paper-2); color: var(--ink); }
@@ -1101,24 +1107,25 @@
     .tb-slider { flex: 1; accent-color: var(--accent); }
 
     /* ── Page navigation ──────────────── */
-    .tb-nav { display: flex; align-items: center; border: 0.5px solid var(--rule); border-radius: 6px; overflow: hidden; }
+    .tb-nav { display: flex; align-items: center; border: 1px solid rgba(26, 24, 20, 0.12); border-radius: 8px; overflow: hidden; background: rgba(250, 248, 244, 0.95); }
     .tb-nav-btn {
       font-family: var(--font-mono); font-size: 13px; color: var(--ink-3);
-      background: transparent; border: none; padding: 3px 9px; cursor: pointer;
+      background: transparent; border: none; padding: 5px 9px; cursor: pointer;
       transition: background 0.12s, color 0.12s; line-height: 1;
     }
     .tb-nav-btn:first-child { border-right: 0.5px solid var(--rule); }
     .tb-nav-btn:last-child  { border-left:  0.5px solid var(--rule); }
     .tb-nav-btn:hover:not(:disabled) { background: var(--paper-2); color: var(--ink); }
     .tb-nav-btn:disabled { opacity: 0.3; cursor: default; }
-    .tb-nav-page { padding: 3px 9px; }
+    .tb-nav-page { padding: 5px 9px; }
 
     /* ── Link buttons ────────────────── */
     .tb-link {
-      font-family: var(--font-mono); font-size: 10px; font-weight: 300;
+      font-family: var(--font-serif); font-size: 10px; font-weight: 300;
       letter-spacing: 0.05em; color: var(--ink-3);
-      text-decoration: none; padding: 4px 9px;
-      border: 0.5px solid var(--rule); border-radius: 6px;
+      text-decoration: none; padding: 5px 9px;
+      border: 1px solid rgba(26, 24, 20, 0.12); border-radius: 8px;
+      background: rgba(250, 248, 244, 0.95);
       white-space: nowrap; transition: background 0.15s, color 0.15s;
     }
     .tb-link:hover { background: var(--paper-2); color: var(--ink); }
@@ -1195,7 +1202,7 @@
       display: grid;
       grid-template-columns: minmax(0, 1fr) 320px;
       min-height: 0;
-      height: calc(100vh - 46px);
+      height: 100%;
     }
 
     .reader-stage {
@@ -1214,7 +1221,7 @@
 
     .reader-kicker {
       margin: 0 0 10px;
-      font-family: 'DM Mono', monospace;
+      font-family: var(--font-serif);
       font-size: 10px;
       font-weight: 300;
       letter-spacing: 0.12em;
@@ -1247,6 +1254,19 @@
       box-shadow: 0 8px 48px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
     }
 
+    .reader-stage-header {
+      font-family: var(--font-serif);
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--ink-2) !important;
+      background: rgba(252, 251, 248, 0.96);
+      letter-spacing: 0.01em;
+    }
+
+    .reader-stage-header > div:last-child {
+      font-variant-numeric: tabular-nums;
+    }
+
     .reader-stage-body {
       flex: 1;
       min-height: 0;
@@ -1259,7 +1279,7 @@
       position: relative !important;
       top: auto !important;
       height: 100% !important;
-      font-family: 'DM Mono', monospace !important;
+      font-family: var(--font-serif) !important;
       overflow: hidden !important;
       display: flex !important;
       flex-direction: column !important;
@@ -1267,27 +1287,27 @@
       padding: 0 !important;
       border-radius: 0 !important;
       border: 0 !important;
-      border-left: 0.5px solid var(--rule) !important;
-      box-shadow: none !important;
-      background: var(--paper-bg-2) !important;
+      border-left: 1px solid var(--rule) !important;
+      box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.35) !important;
+      background: var(--paper-bg) !important;
     }
 
     .reader-sidebar-tabs {
       display: flex;
       padding: 0 18px;
-      border-bottom: 0.5px solid var(--rule);
-      background: var(--paper-bg-2);
+      border-bottom: 1px solid var(--rule);
+      background: rgba(252, 251, 248, 0.96);
       flex-shrink: 0;
     }
 
     .reader-sidebar-tab {
       padding: 14px 10px 12px;
       border-bottom: 1.5px solid transparent;
-      font-family: 'DM Mono', monospace;
+      font-family: var(--font-serif);
       font-size: 10px;
-      font-weight: 300;
+      font-weight: 400;
       letter-spacing: 0.09em;
-      color: var(--ink-3);
+      color: var(--ink-2);
       text-transform: lowercase;
     }
 
@@ -1298,18 +1318,19 @@
 
     .reader-sidebar-search {
       padding: 10px 16px;
-      border-bottom: 0.5px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      background: rgba(252, 251, 248, 0.96);
       flex-shrink: 0;
     }
 
     .reader-sidebar-search input {
       width: 100%;
-      border: 0.5px solid var(--rule);
-      border-radius: 6px;
+      border: 1px solid rgba(22, 19, 15, 0.18);
+      border-radius: 7px;
       padding: 7px 10px;
-      background: var(--paper);
+      background: rgba(255, 253, 249, 0.92);
       color: var(--ink);
-      font-family: 'DM Mono', monospace;
+      font-family: var(--font-serif);
       font-size: 11px;
       outline: none;
     }
@@ -1321,9 +1342,9 @@
     .reader-sidebar > section {
       margin: 0 !important;
       border: 0 !important;
-      border-bottom: 0.5px solid var(--rule) !important;
+      border-bottom: 1px solid var(--rule) !important;
       border-radius: 0 !important;
-      background: transparent !important;
+      background: rgba(252, 251, 248, 0.96) !important;
       box-shadow: none !important;
       padding: 14px 18px 16px !important;
     }
@@ -1332,7 +1353,7 @@
     .reader-navigation-panel button,
     .reader-stage .reader-topbar-actions a,
     .reader-sidebar .reader-sidebar-tab {
-      font-family: 'DM Mono', monospace !important;
+      font-family: var(--font-serif) !important;
       font-size: 10px !important;
       font-weight: 300 !important;
       letter-spacing: 0.08em !important;
@@ -1359,7 +1380,7 @@
       border-radius: 0 !important;
       background: var(--paper-bg) !important;
       border-color: var(--rule) !important;
-      font-family: 'DM Mono', monospace !important;
+      font-family: var(--font-serif) !important;
       font-size: 10px !important;
     }
 
@@ -1403,7 +1424,7 @@
 
     .reader-sidebar p.text-xs.uppercase,
     .reader-sidebar p.text-[10px].uppercase {
-      font-family: 'DM Mono', monospace;
+      font-family: var(--font-serif);
       font-size: 10px !important;
       font-weight: 300;
       letter-spacing: 0.09em !important;
@@ -1415,7 +1436,7 @@
     .reader-sidebar select,
     .reader-sidebar textarea,
     .reader-sidebar input {
-      font-family: 'DM Mono', monospace !important;
+      font-family: var(--font-serif) !important;
     }
 
     .reader-sidebar button:not([aria-label='Delete highlight']):not([aria-label='Delete note']) {
@@ -1465,7 +1486,7 @@
     }
 
     .reader-sidebar [data-testid='notes-sidebar'] li > button:first-child span.text-sm {
-      font-family: 'DM Mono', monospace;
+      font-family: var(--font-serif);
       font-size: 11px !important;
       font-weight: 300;
       color: var(--ink) !important;
@@ -1476,7 +1497,7 @@
     .reader-sidebar [data-testid='notes-sidebar'] li > button:first-child .rounded-full {
       background: transparent !important;
       padding: 0 !important;
-      font-family: 'DM Mono', monospace;
+      font-family: var(--font-serif);
       font-size: 9px !important;
       font-weight: 300;
       letter-spacing: 0.08em;
@@ -1508,7 +1529,7 @@
 
     .reader-sidebar .note-item,
     .reader-sidebar .note-item * {
-      font-family: 'DM Mono', monospace !important;
+      font-family: var(--font-serif) !important;
     }
 
     .reader-sidebar .rounded-2xl,
@@ -1566,10 +1587,10 @@
     .paper-sidebar-section-label {
       font-family: var(--font-mono);
       font-size: 9px;
-      font-weight: 300;
+      font-weight: 400;
       letter-spacing: 0.10em;
       text-transform: uppercase;
-      color: var(--ink-3);
+      color: var(--ink-2);
       margin: 0 0 8px;
     }
 
@@ -1580,8 +1601,8 @@
     .paper-sidebar-empty {
       font-family: var(--font-mono);
       font-size: 11px;
-      font-weight: 300;
-      color: var(--ink-3);
+      font-weight: 400;
+      color: var(--ink-2);
       margin: 0;
     }
 
@@ -1635,20 +1656,22 @@
     .paper-note-group-label {
       font-family: var(--font-mono);
       font-size: 9px;
-      font-weight: 300;
+      font-weight: 400;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--ink-3);
-      padding: 10px 18px 4px;
+      color: var(--ink-2);
+      padding: 12px 18px 6px;
       margin: 0;
     }
 
     .paper-note-item {
-      border-bottom: 0.5px solid var(--rule);
+      border-bottom: 1px solid rgba(22, 19, 15, 0.10);
+      border-top: 1px solid rgba(255, 255, 255, 0.6);
       padding: 12px 18px;
+      background: rgba(255, 253, 249, 0.98);
       transition: background 0.12s;
     }
-    .paper-note-item:hover { background: var(--paper); }
+    .paper-note-item:hover { background: #ffffff; }
 
     .paper-note-loc {
       display: flex;
@@ -1660,16 +1683,16 @@
     .paper-note-label {
       font-family: var(--font-mono);
       font-size: 9px;
-      font-weight: 300;
+      font-weight: 400;
       letter-spacing: 0.08em;
-      color: var(--ink-3);
+      color: var(--ink-2);
     }
 
     .paper-note-quote {
       font-size: 11px;
       font-style: italic;
       color: var(--ink-2);
-      border-left: 1.5px solid var(--paper-3);
+      border-left: 2px solid var(--accent);
       padding-left: 8px;
       margin-bottom: 8px;
       line-height: 1.5;
@@ -1694,7 +1717,7 @@
     .paper-note-body {
       font-family: var(--font-mono);
       font-size: 11px;
-      font-weight: 300;
+      font-weight: 400;
       line-height: 1.65;
       color: var(--ink);
     }

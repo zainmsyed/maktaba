@@ -197,6 +197,26 @@
     "0d8e7c75": "Complete the Vazir bootstrap context drafting using the currently selected Pi mo",
     "58b709d7": "Run a code review and write the results to .context/reviews/review-20260429-0221",
     "165f1ea2": "npx fallow audit --base HEAD~1 --format json",
-    "4d64cc0a": "Run a code review and write the results to .context/reviews/review-20260429-0232"
+    "4d64cc0a": "Run a code review and write the results to .context/reviews/review-20260429-0232",
+    "4c046b4b": "1 but dont remove the local untracked files",
+    "af4b0002": "1 but dont remove the local untracked files",
+    "5a8ac4df": "im not seeing that big of a change\n\n/tmp/pi-clipboard-464f92a3-636b-45bb-b959-e8",
+    "5de3ac19": "idk why but it looks like were using multiple fonts in the application. i like t",
+    "cb71b789": "idk why but it looks like were using multiple fonts in the application. i like t",
+    "242361dc": "the header is not consistent going from the library to the reader. can we keep i",
+    "8ecc083d": "the header is not consistent going from the library to the reader. can we keep i",
+    "f8d9c620": "the header is not consistent going from the library to the reader. can we keep i",
+    "63f3f25a": "the header is not consistent going from the library to the reader. can we keep i",
+    "8e3b04df": "the header is not consistent going from the library to the reader. can we keep i",
+    "f7cc791b": "the header is not consistent going from the library to the reader. can we keep i",
+    "355ed3fe": "the header is not consistent going from the library to the reader. can we keep i",
+    "537a38d4": "1. mathch everything.  \n2. yes",
+    "44696c41": "Im having to restart the front end docker container everytime a change is made. ",
+    "a24c08ac": "frontend-1  | npm error the command again as root/Administrator.\nfrontend-1  | n",
+    "1d08c4c5": "i did compose down. can you restart everything with the dev server please",
+    "0521ec9b": "i did compose down. can you restart everything with the dev server please",
+    "a5a96d78": "umm the reader bar became much larger! what i want is when the user enter the re",
+    "b5e596e0": "please commit and push this",
+    "ba6a4611": "please commit and push this"
   }
 }
