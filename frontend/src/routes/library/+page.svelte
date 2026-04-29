@@ -83,25 +83,6 @@
     return 'ready';
   }
 
-  function statusLabel(entry: DocWithJobs) {
-    if (entry.uploading) return 'Uploading…';
-    if (entry.error) return 'Upload failed';
-    const status = jobStatus(entry.jobs);
-    if (status === 'processing') return 'Processing';
-    if (status === 'failed') return 'Failed';
-    return 'Ready';
-  }
-
-  function progressLabel(entry: DocWithJobs) {
-    if (entry.uploading) return 'Uploading…';
-    if (entry.error) return 'Upload failed';
-    const status = jobStatus(entry.jobs);
-    if (status === 'processing') return 'Extracting…';
-    if (status === 'failed') return 'Needs attention';
-    const pageCount = Number(entry.document?.page_count ?? 0);
-    return pageCount > 0 ? `${pageCount} pages` : 'Open to read';
-  }
-
   function statusTone(entry: DocWithJobs) {
     if (entry.uploading) return 'amber';
     if (entry.error) return 'rose';
@@ -109,28 +90,6 @@
     if (status === 'processing') return 'amber';
     if (status === 'failed') return 'rose';
     return 'emerald';
-  }
-
-  function progressWidth(entry: DocWithJobs) {
-    if (entry.uploading) return 24;
-    if (entry.error) return 14;
-    const status = jobStatus(entry.jobs);
-    if (status === 'processing') return 42;
-    if (status === 'failed') return 18;
-    const pageCount = Number(entry.document?.page_count ?? 0);
-    if (pageCount > 0) {
-      return Math.min(100, Math.max(36, pageCount * 8));
-    }
-    return entry.document?.format?.toLowerCase() === 'epub' ? 82 : 68;
-  }
-
-  function humanFormatDate(iso: string | undefined) {
-    if (!iso) return '';
-    try {
-      return new Date(iso).toLocaleString();
-    } catch {
-      return iso;
-    }
   }
 
   // derive a sorted array reactively so Svelte change detection is reliable
@@ -285,44 +244,23 @@
       {:else}
         <div class="books-grid">
           {#each sortedDocuments as entry, index (entry.document.id ?? entry.localId)}
-            <article class="book-card">
-              <div class={`book-cover ${coverClass(index)} ${statusTone(entry)}`}>
-                <div class="cover-noise"></div>
-                <span class="format-badge">{(entry.document.format || '').toUpperCase() || 'PDF'}</span>
-                <span class="cover-title">{entry.document.title ?? 'Untitled'}</span>
-              </div>
-
-              <div class="book-card-body">
-                <div class="book-card-head">
-                  <h2 class="book-card-title">{entry.document.title ?? 'Untitled'}</h2>
-                  <span class={`status-pill ${statusTone(entry)}`}>{statusLabel(entry)}</span>
+            {#if readerHref(entry.document)}
+              <a href={readerHref(entry.document)} class="book-card">
+                <div class={`book-cover ${coverClass(index)} ${statusTone(entry)}`}>
+                  <div class="cover-noise"></div>
+                  <span class="format-badge">{(entry.document.format || '').toUpperCase() || 'PDF'}</span>
+                  <span class="cover-title">{entry.document.title ?? 'Untitled'}</span>
                 </div>
-
-                <p class="book-card-author">
-                  {#if entry.document.authors && entry.document.authors.length > 0}
-                    {entry.document.authors.join(', ')}
-                  {:else}
-                    Unknown author
-                  {/if}
-                </p>
-
-                <div class="book-progress-row">
-                  <div class="book-prog-bar">
-                    <div class={`book-prog-fill ${statusTone(entry)}`} style={`width: ${progressWidth(entry)}%`}></div>
-                  </div>
-                  <span class="book-prog-label">{progressLabel(entry)}</span>
+              </a>
+            {:else}
+              <article class="book-card">
+                <div class={`book-cover ${coverClass(index)} ${statusTone(entry)}`}>
+                  <div class="cover-noise"></div>
+                  <span class="format-badge">{(entry.document.format || '').toUpperCase() || 'PDF'}</span>
+                  <span class="cover-title">{entry.document.title ?? 'Untitled'}</span>
                 </div>
-
-                <div class="book-card-footer">
-                  <span class="book-card-date">{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</span>
-                  {#if readerHref(entry.document)}
-                    <a href={readerHref(entry.document)} class="book-open">Open</a>
-                  {:else}
-                    <span class="book-open disabled">PDF only</span>
-                  {/if}
-                </div>
-              </div>
-            </article>
+              </article>
+            {/if}
           {/each}
         </div>
       {/if}
@@ -335,18 +273,18 @@
     min-height: 100%;
   }
 
-  :global(body) {
-    margin: 0;
-    min-height: 100vh;
-    color: #1a1814;
-    background: linear-gradient(180deg, #f7f4ee 0%, #e8e5de 100%);
-    font-family: 'Lora', Georgia, serif;
-    color-scheme: light;
-  }
-
   :global(a) {
     color: inherit;
     text-decoration: none;
+  }
+
+  .library-page {
+    min-height: 100vh;
+    padding: 0;
+    color: #1a1814;
+    font-family: 'Lora', Georgia, serif;
+    color-scheme: light;
+    background: linear-gradient(180deg, #f7f4ee 0%, #e8e5de 100%);
   }
 
   .library-page {
@@ -358,6 +296,7 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    background: linear-gradient(180deg, #f7f4ee 0%, #e8e5de 100%);
   }
 
   .topbar {
@@ -528,14 +467,15 @@
   }
 
   .book-card {
-    display: flex;
-    flex-direction: column;
+    display: block;
     border-radius: 12px;
     overflow: hidden;
     background: rgba(250, 248, 244, 0.95);
     border: 1px solid rgba(26, 24, 20, 0.08);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
     transition: transform 0.15s, box-shadow 0.15s;
+    text-decoration: none;
+    color: inherit;
   }
 
   .book-card:hover {
@@ -586,149 +526,6 @@
   .cover-2 { background: linear-gradient(145deg, #8b4513, #5c2d0a); }
   .cover-3 { background: linear-gradient(145deg, #1a3a2a, #0d1f16); }
   .cover-4 { background: linear-gradient(145deg, #2d1b4e, #1a0f2e); }
-
-  .book-card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 14px 14px 16px;
-  }
-
-  .book-card-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .book-card-title {
-    margin: 0;
-    font-size: 13px;
-    line-height: 1.35;
-    font-weight: 500;
-    color: #1a1814;
-  }
-
-  .book-card-author {
-    margin: 0;
-    font-family: var(--font-serif);
-    font-size: 10px;
-    font-weight: 300;
-    color: #8a8680;
-  }
-
-  .status-pill {
-    flex-shrink: 0;
-    padding: 5px 9px;
-    border-radius: 999px;
-    font-family: var(--font-serif);
-    font-size: 9px;
-    font-weight: 400;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  .status-pill.emerald {
-    background: rgba(16, 185, 129, 0.12);
-    color: #047857;
-  }
-
-  .status-pill.amber {
-    background: rgba(245, 158, 11, 0.12);
-    color: #92400e;
-  }
-
-  .status-pill.rose {
-    background: rgba(244, 63, 94, 0.12);
-    color: #be123c;
-  }
-
-  .book-progress-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .book-prog-bar {
-    flex: 1;
-    height: 2px;
-    border-radius: 999px;
-    background: rgba(232, 229, 222, 0.9);
-    overflow: hidden;
-  }
-
-  .book-prog-fill {
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #b85c2e, #d99447);
-  }
-
-  .book-prog-fill.emerald {
-    background: linear-gradient(90deg, #36b37e, #65d19c);
-  }
-
-  .book-prog-fill.amber {
-    background: linear-gradient(90deg, #d97706, #f59e0b);
-  }
-
-  .book-prog-fill.rose {
-    background: linear-gradient(90deg, #e11d48, #fb7185);
-  }
-
-  .book-prog-label {
-    flex-shrink: 0;
-    font-family: var(--font-serif);
-    font-size: 9px;
-    font-weight: 300;
-    color: #8a8680;
-    white-space: nowrap;
-  }
-
-  .book-card-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-top: 2px;
-  }
-
-  .book-card-date {
-    font-family: var(--font-serif);
-    font-size: 9px;
-    font-weight: 300;
-    color: #8a8680;
-  }
-
-  .book-open {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 54px;
-    padding: 6px 9px;
-    border-radius: 999px;
-    border: 1px solid rgba(184, 92, 46, 0.28);
-    background: rgba(240, 230, 220, 0.55);
-    color: #b85c2e;
-    font-family: var(--font-serif);
-    font-size: 9px;
-    font-weight: 400;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    transition: transform 0.15s, background 0.15s, border-color 0.15s;
-  }
-
-  .book-open:hover {
-    transform: translateY(-1px);
-    background: rgba(240, 230, 220, 0.9);
-    border-color: rgba(184, 92, 46, 0.4);
-  }
-
-  .book-open.disabled {
-    border-color: rgba(26, 24, 20, 0.12);
-    background: rgba(242, 240, 235, 0.72);
-    color: #8a8680;
-  }
 
   @media (max-width: 768px) {
     .topbar {
