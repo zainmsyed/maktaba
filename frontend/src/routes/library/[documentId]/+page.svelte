@@ -67,6 +67,34 @@
   let statusMessage = 'Loading PDF…';
   let currentPage = 1;
   let totalPages = data.document.page_count ?? 0;
+  let maxPageReached = 1;
+
+  function loadProgress() {
+    try {
+      const raw = localStorage.getItem(`maktaba:progress:${data.document.id}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        maxPageReached = Math.max(1, Math.min(totalPages || Infinity, Number(parsed.page) || 1));
+      }
+    } catch {
+      maxPageReached = 1;
+    }
+  }
+
+  function saveProgress() {
+    try {
+      localStorage.setItem(
+        `maktaba:progress:${data.document.id}`,
+        JSON.stringify({ page: maxPageReached, total: totalPages }),
+      );
+    } catch {}
+  }
+
+  $: if (totalPages > 0 && maxPageReached === 1) loadProgress();
+  $: if (currentPage > maxPageReached) {
+    maxPageReached = currentPage;
+    saveProgress();
+  }
   let zoomMode: ZoomMode = 'fit-width';
   let highlightMode: HighlightMode = 'text';
   let customZoom = 1;
@@ -140,8 +168,9 @@
     ? data.document.authors.join(', ')
     : 'Unknown author';
   $: pageDisplay = totalPages > 0 ? `${currentPage} / ${totalPages}` : '—';
-  $: readingProgressLabel = totalPages > 0 ? `p. ${currentPage} of ${totalPages}` : 'p. —';
-  $: readingProgressPercent = totalPages > 0 ? Math.max(1, Math.round((currentPage / totalPages) * 100)) : 0;
+  $: readingProgressLabel = totalPages > 0 ? `p. ${maxPageReached} of ${totalPages}` : 'p. —';
+  $: readingProgressPercent = totalPages > 0 ? Math.min(100, Math.max(1, Math.round((maxPageReached / totalPages) * 100))) : 0;
+  $: readingProgressComplete = readingProgressPercent >= 100;
   $: zoomDisplay =
     zoomMode === 'fit-width'
       ? 'Fit width'
@@ -1050,7 +1079,9 @@
       white-space: nowrap;
     }
     .tb-progress-track { width: 68px; height: 2px; background: var(--paper-3); border-radius: 999px; overflow: hidden; }
-    .tb-progress-fill  { height: 100%; background: var(--accent); border-radius: inherit; }
+    .tb-progress-fill  { height: 100%; border-radius: inherit; transition: background 0.3s; }
+    .tb-progress-fill--reading { background: linear-gradient(90deg, #e11d48, #fb7185); }
+    .tb-progress-fill--complete { background: linear-gradient(90deg, #36b37e, #65d19c); }
 
     .tb-status {
       font-family: var(--font-mono); font-size: 9px; font-weight: 400;
@@ -1803,7 +1834,7 @@
 
     <div class="reader-topbar-center">
       <span class="tb-label">{readingProgressLabel}</span>
-      <div class="tb-progress-track"><div class="tb-progress-fill" style={`width:${readingProgressPercent}%`}></div></div>
+      <div class="tb-progress-track"><div class="tb-progress-fill" class:tb-progress-fill--reading={!readingProgressComplete} class:tb-progress-fill--complete={readingProgressComplete} style={`width:${readingProgressPercent}%`}></div></div>
       <span class="tb-label">{readingProgressPercent}%</span>
       {#if jobStatus !== 'ready'}
         <span class="tb-status tb-status--{jobStatus}">{jobStatusLabel}</span>

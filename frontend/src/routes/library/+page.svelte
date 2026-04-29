@@ -99,14 +99,29 @@
     return 'emerald';
   }
 
+  function getStoredProgress(docId: string) {
+    try {
+      const raw = localStorage.getItem(`maktaba:progress:${docId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return { page: Number(parsed.page) || 1, total: Number(parsed.total) || 1 };
+      }
+    } catch {}
+    return { page: 0, total: 1 };
+  }
+
   function progressLabel(entry: DocWithJobs) {
     if (entry.uploading) return 'Uploading…';
     if (entry.error) return 'Upload failed';
     const status = jobStatus(entry.jobs);
     if (status === 'processing') return 'Extracting…';
     if (status === 'failed') return 'Needs attention';
-    const pageCount = Number(entry.document?.page_count ?? 0);
-    return pageCount > 0 ? `${pageCount} pages` : 'Open to read';
+    const total = Number(entry.document?.page_count ?? 0);
+    if (total <= 0) return 'Open to read';
+    const stored = getStoredProgress(entry.document?.id ?? '');
+    if (stored.page <= 0) return `${total} pages`;
+    const pct = Math.min(100, Math.max(1, Math.round((stored.page / total) * 100)));
+    return `${pct}%`;
   }
 
   function progressWidth(entry: DocWithJobs) {
@@ -115,11 +130,19 @@
     const status = jobStatus(entry.jobs);
     if (status === 'processing') return 42;
     if (status === 'failed') return 18;
-    const pageCount = Number(entry.document?.page_count ?? 0);
-    if (pageCount > 0) {
-      return Math.min(100, Math.max(36, pageCount * 8));
-    }
-    return entry.document?.format?.toLowerCase() === 'epub' ? 82 : 68;
+    const total = Number(entry.document?.page_count ?? 0);
+    if (total <= 0) return 0;
+    const stored = getStoredProgress(entry.document?.id ?? '');
+    if (stored.page <= 0) return 0;
+    return Math.min(100, Math.max(1, Math.round((stored.page / total) * 100)));
+  }
+
+  function progressComplete(entry: DocWithJobs) {
+    const total = Number(entry.document?.page_count ?? 0);
+    if (total <= 0) return false;
+    const stored = getStoredProgress(entry.document?.id ?? '');
+    if (stored.page <= 0) return false;
+    return stored.page >= total;
   }
 
   function humanFormatDate(iso: string | undefined) {
@@ -305,7 +328,7 @@
                   </p>
                   <div class="book-progress-row">
                     <div class="book-prog-bar">
-                      <div class={`book-prog-fill ${statusTone(entry)}`} style={`width: ${progressWidth(entry)}%`}></div>
+                      <div class="book-prog-fill" class:book-prog-fill--complete={progressComplete(entry)} style={`width: ${progressWidth(entry)}%`}></div>
                     </div>
                     <span class="book-prog-label">{progressLabel(entry)}</span>
                   </div>
@@ -352,7 +375,7 @@
                   </p>
                   <div class="book-progress-row">
                     <div class="book-prog-bar">
-                      <div class={`book-prog-fill ${statusTone(entry)}`} style={`width: ${progressWidth(entry)}%`}></div>
+                      <div class="book-prog-fill" class:book-prog-fill--complete={progressComplete(entry)} style={`width: ${progressWidth(entry)}%`}></div>
                     </div>
                     <span class="book-prog-label">{progressLabel(entry)}</span>
                   </div>
@@ -657,19 +680,12 @@
   .book-prog-fill {
     height: 100%;
     border-radius: inherit;
-    background: linear-gradient(90deg, #b85c2e, #d99447);
-  }
-
-  .book-prog-fill.emerald {
-    background: linear-gradient(90deg, #36b37e, #65d19c);
-  }
-
-  .book-prog-fill.amber {
-    background: linear-gradient(90deg, #d97706, #f59e0b);
-  }
-
-  .book-prog-fill.rose {
     background: linear-gradient(90deg, #e11d48, #fb7185);
+    transition: background 0.3s;
+  }
+
+  .book-prog-fill--complete {
+    background: linear-gradient(90deg, #36b37e, #65d19c);
   }
 
   .book-prog-label {
