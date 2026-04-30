@@ -1,5 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { beforeNavigate } from '$app/navigation';
   import { onMount, tick } from 'svelte';
   import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
   import {
@@ -74,7 +75,9 @@
       const raw = localStorage.getItem(`maktaba:progress:${data.document.id}`);
       if (raw) {
         const parsed = JSON.parse(raw);
-        maxPageReached = Math.max(1, Math.min(totalPages || Infinity, Number(parsed.page) || 1));
+        maxPageReached = Math.max(1, Math.min(totalPages || Infinity, Number(parsed.maxPage) || Number(parsed.page) || 1));
+        const savedPage = Number(parsed.lastPage) || Number(parsed.page) || 1;
+        currentPage = Math.max(1, Math.min(totalPages || Infinity, savedPage));
       }
     } catch {
       maxPageReached = 1;
@@ -85,7 +88,7 @@
     try {
       localStorage.setItem(
         `maktaba:progress:${data.document.id}`,
-        JSON.stringify({ page: maxPageReached, total: totalPages }),
+        JSON.stringify({ lastPage: currentPage, maxPage: maxPageReached, total: totalPages }),
       );
     } catch {}
   }
@@ -95,6 +98,9 @@
     maxPageReached = currentPage;
     saveProgress();
   }
+  beforeNavigate(() => {
+    saveProgress();
+  });
   let zoomMode: ZoomMode = 'fit-width';
   let highlightMode: HighlightMode = 'text';
   let customZoom = 1;
@@ -737,7 +743,6 @@
     pdfScrollerEl = nextScroller;
     if (pdfScrollerEl) {
       pdfScrollerEl.addEventListener('scroll', handlePdfScroll, { passive: true });
-      updateCurrentPageFromScroll();
     }
   }
 
@@ -782,6 +787,22 @@
         zoomMode = 'fit-width';
       }
       scheduleHighlightsRefresh();
+      // Restore scroll to last viewed page after the PDF layout settles
+      const savedPage = currentPage;
+      if (savedPage > 1 && pdfScrollerEl) {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            const pageEl = pdfScrollerEl?.querySelector<HTMLElement>(`.page[data-page-number="${savedPage}"]`);
+            if (pageEl) {
+              pageEl.scrollIntoView({ block: 'start', behavior: 'auto' });
+              currentPage = savedPage;
+              if (totalPages > 0) {
+                statusMessage = `Showing page ${currentPage} of ${totalPages}`;
+              }
+            }
+          });
+        });
+      }
     });
   }
 
@@ -878,10 +899,16 @@
     void loadNotes();
     setHighlightMode('text');
 
+    const handleBeforeUnload = () => saveProgress();
+    const progressSaveInterval = window.setInterval(saveProgress, 5000);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
       unsubscribeHighlightsStore?.();
       disconnectPdfScroller();
       clearNoteTimers();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.clearInterval(progressSaveInterval);
       if (typeof window !== 'undefined') {
         if (scrollFrame !== null) {
           window.cancelAnimationFrame(scrollFrame);
@@ -1245,7 +1272,7 @@
       height: 100%;
       display: flex;
       flex-direction: column;
-      padding: 22px 32px 22px;
+      padding: 0;
       background: var(--paper-bg);
     }
 
@@ -1284,21 +1311,9 @@
       flex-direction: column;
       overflow: hidden;
       background: var(--paper) !important;
-      border-color: var(--rule) !important;
-      box-shadow: 0 8px 48px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
-    }
-
-    .reader-stage-header {
-      font-family: var(--font-serif);
-      font-size: 14px;
-      font-weight: 400;
-      color: var(--ink-2) !important;
-      background: rgba(252, 251, 248, 0.96);
-      letter-spacing: 0.01em;
-    }
-
-    .reader-stage-header > div:last-child {
-      font-variant-numeric: tabular-nums;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
     }
 
     .reader-stage-body {
@@ -1566,8 +1581,7 @@
       font-family: var(--font-serif) !important;
     }
 
-    .reader-sidebar .rounded-2xl,
-    .reader-stage .rounded-3xl {
+    .reader-sidebar .rounded-2xl {
       border-radius: 12px !important;
     }
 
@@ -1795,7 +1809,7 @@
       }
 
       .reader-stage {
-        padding: 14px 16px;
+        padding: 0;
       }
 
       .reader-stage-card {
@@ -2020,13 +2034,9 @@
         <p class="reader-authors">{authorsLabel}</p>
       </div>
 
-      <div class="reader-stage-card rounded-3xl border border-slate-700/80 bg-slate-950/70 shadow-2xl shadow-cyan-950/10">
-        <div class="reader-stage-header flex items-center justify-between border-b border-slate-800 px-5 py-4 text-sm text-slate-400">
-          <div>{documentTitle}</div>
-          <div>{pageDisplay}</div>
-        </div>
+      <div class="reader-stage-card">
         <div class="reader-stage-body">
-        <div bind:this={pdfViewerHostEl} class="reader-pdf-shell relative h-full overflow-hidden rounded-2xl bg-slate-900/60">
+        <div bind:this={pdfViewerHostEl} class="reader-pdf-shell relative h-full overflow-hidden">
           {#if browser}
             {#if error}
               <div class="flex h-full items-center justify-center p-6">
@@ -2038,14 +2048,14 @@
             {:else}
               <PdfLoader document={data.fileUrl} onError={handlePdfLoadError} workerSrc={PDF_WORKER_SRC}>
                 {#snippet beforeLoad(progress)}
-                  <div class="flex h-full items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/70 px-6 py-5 text-sm text-slate-300">
+                  <div class="flex h-full items-center justify-center text-sm" style="color: var(--ink-3);">
                     Loading PDF… {progress.total ? Math.floor((progress.loaded / progress.total) * 100) : 0}%
                   </div>
                 {/snippet}
 
                 {#snippet errorMessage(loadError)}
                   <div class="flex h-full items-center justify-center p-6">
-                    <div class="max-w-lg rounded-2xl border border-rose-700 bg-rose-950/40 p-6 text-sm text-rose-100">
+                    <div class="max-w-lg rounded-2xl border p-6 text-sm" style="border-color: rgba(190, 18, 60, 0.35); background: rgba(254, 242, 242, 0.9); color: #991b1b;">
                       <p class="font-semibold">Unable to load the reader</p>
                       <p class="mt-2">{loadError.message}</p>
                     </div>
@@ -2063,13 +2073,13 @@
                     editHighlightPopup={editHighlightPopup as any}
                     onHighlightsRendered={handleHighlighterRendered}
                     scaleOnResize={true}
-                    style="width: 100%; height: 100%; background: rgb(15 23 42);"
+                    style="width: 100%; height: 100%; background: var(--paper-bg); scrollbar-width: thin; scrollbar-color: rgba(22,19,15,0.25) transparent;"
                   />
                 {/snippet}
               </PdfLoader>
             {/if}
           {:else}
-            <div class="flex h-full items-center justify-center p-6 text-sm text-slate-400">
+            <div class="flex h-full items-center justify-center p-6 text-sm" style="color: var(--ink-3);">
               Loading reader…
             </div>
           {/if}
@@ -2082,11 +2092,19 @@
 
 <style>
   :global(.reader-pdf-shell .PdfHighlighter) {
-    background: rgb(15 23 42);
+    background: var(--paper-bg);
   }
 
   :global(.reader-pdf-shell .pdfViewer .page) {
-    margin: 1rem auto;
-    box-shadow: 0 20px 50px rgb(0 0 0 / 0.35);
+    margin: 0 auto;
+    box-shadow: 0 4px 24px rgb(0 0 0 / 0.15);
   }
+
+  /* thin modern scrollbar */
+  :global(.reader-pdf-shell .PdfHighlighter) { scrollbar-width: thin; scrollbar-color: rgba(22, 19, 15, 0.28) transparent; }
+  :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar) { width: 7px; height: 7px; }
+  :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar-track) { background: transparent; }
+  :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar-thumb) { background: rgba(22, 19, 15, 0.28); border-radius: 3px; }
+  :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar-thumb:hover) { background: rgba(22, 19, 15, 0.45); }
+  :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar-corner) { background: transparent; }
 </style>

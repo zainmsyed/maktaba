@@ -104,7 +104,10 @@
       const raw = localStorage.getItem(`maktaba:progress:${docId}`);
       if (raw) {
         const parsed = JSON.parse(raw);
-        return { page: Number(parsed.page) || 1, total: Number(parsed.total) || 1 };
+        return {
+          page: Number(parsed.maxPage) || Number(parsed.page) || 0,
+          total: Number(parsed.total) || 1,
+        };
       }
     } catch {}
     return { page: 0, total: 1 };
