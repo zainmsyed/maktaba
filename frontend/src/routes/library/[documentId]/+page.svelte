@@ -1053,7 +1053,7 @@
 
     .reader-wordmark {
       font-family: var(--font-serif);
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 500;
       letter-spacing: 0.07em;
       color: var(--ink);
@@ -1228,7 +1228,7 @@
     }
     .hp-note-preview {
       font-family: var(--font-mono);
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 300;
       color: var(--ink-2);
       border-left: 1.5px solid var(--accent-soft);
@@ -1403,7 +1403,7 @@
     .reader-stage .reader-topbar-actions a,
     .reader-sidebar .reader-sidebar-tab {
       font-family: var(--font-serif) !important;
-      font-size: 10px !important;
+      font-size: 12px !important;
       font-weight: 300 !important;
       letter-spacing: 0.08em !important;
     }
@@ -1430,7 +1430,7 @@
       background: var(--paper-bg) !important;
       border-color: var(--rule) !important;
       font-family: var(--font-serif) !important;
-      font-size: 10px !important;
+      font-size: 12px !important;
     }
 
     .reader-sidebar > section[data-testid='notes-sidebar'] {
@@ -1474,7 +1474,7 @@
     .reader-sidebar p.text-xs.uppercase,
     .reader-sidebar p.text-[10px].uppercase {
       font-family: var(--font-serif);
-      font-size: 10px !important;
+      font-size: 12px !important;
       font-weight: 300;
       letter-spacing: 0.09em !important;
       color: var(--ink-3) !important;
@@ -1536,7 +1536,7 @@
 
     .reader-sidebar [data-testid='notes-sidebar'] li > button:first-child span.text-sm {
       font-family: var(--font-serif);
-      font-size: 11px !important;
+      font-size: 12px !important;
       font-weight: 300;
       color: var(--ink) !important;
       white-space: normal;
@@ -1547,7 +1547,7 @@
       background: transparent !important;
       padding: 0 !important;
       font-family: var(--font-serif);
-      font-size: 9px !important;
+      font-size: 10px !important;
       font-weight: 300;
       letter-spacing: 0.08em;
       color: var(--ink-3) !important;
@@ -1697,7 +1697,7 @@
     .paper-hl-del-btn:hover { color: #c44040; }
 
     .paper-add-note-btn {
-      font-size: 9px !important;
+      font-size: 10px !important;
       padding: 4px 10px !important;
     }
 
