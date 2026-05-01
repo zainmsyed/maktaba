@@ -28,6 +28,30 @@ def vector_extension_enabled(connection: Connection) -> bool:
 
 def create_tables(connection: Connection) -> None:
     SQLModel.metadata.create_all(connection)
+    ensure_highlight_locator_columns(connection)
+
+
+def ensure_highlight_locator_columns(connection: Connection) -> None:
+    connection.exec_driver_sql(
+        "ALTER TABLE highlights ADD COLUMN IF NOT EXISTS highlight_type VARCHAR NOT NULL DEFAULT 'area'",
+    )
+    connection.exec_driver_sql(
+        "ALTER TABLE highlights ADD COLUMN IF NOT EXISTS rects JSONB",
+    )
+    connection.exec_driver_sql(
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'ck_highlights_type'
+          ) THEN
+            ALTER TABLE highlights
+              ADD CONSTRAINT ck_highlights_type CHECK (highlight_type IN ('text', 'area'));
+          END IF;
+        END
+        $$;
+        """,
+    )
 
 
 def initialize_database() -> None:

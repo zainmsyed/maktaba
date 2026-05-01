@@ -16,6 +16,7 @@
     createNoteClient,
     type BackendHighlight,
     type BackendNote,
+    type HighlightCreatePayload,
     type LibraryHighlight,
   } from './highlight-api';
   import NoteEditor from '../../../components/NoteEditor.svelte';
@@ -91,6 +92,59 @@
         JSON.stringify({ lastPage: currentPage, maxPage: maxPageReached, total: totalPages }),
       );
     } catch {}
+  }
+
+  const highlightLocatorCacheKey = `maktaba:highlight-locators:${data.document.id}`;
+
+  type CachedHighlightLocator = Pick<
+    HighlightCreatePayload,
+    'page_number' | 'x' | 'y' | 'width' | 'height' | 'extracted_text' | 'highlight_type' | 'rects'
+  >;
+
+  function readHighlightLocatorCache(): Record<string, CachedHighlightLocator> {
+    if (!browser) return {};
+    try {
+      return JSON.parse(localStorage.getItem(highlightLocatorCacheKey) || '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  function cacheHighlightLocator(highlightId: string, payload: HighlightCreatePayload) {
+    if (!browser || !highlightId) return;
+    try {
+      const cache = readHighlightLocatorCache();
+      cache[highlightId] = {
+        page_number: payload.page_number,
+        x: payload.x,
+        y: payload.y,
+        width: payload.width,
+        height: payload.height,
+        extracted_text: payload.extracted_text,
+        highlight_type: payload.highlight_type,
+        rects: payload.rects,
+      };
+      localStorage.setItem(highlightLocatorCacheKey, JSON.stringify(cache));
+    } catch {}
+  }
+
+  function mergeCachedHighlightLocator(highlight: BackendHighlight): BackendHighlight {
+    const cached = readHighlightLocatorCache()[highlight.id];
+    if (!cached) return highlight;
+    const shouldUseCachedTextLocator = cached.highlight_type === 'text' && (cached.rects?.length ?? 0) > 0;
+    if (!shouldUseCachedTextLocator) return highlight;
+
+    return {
+      ...highlight,
+      page_number: cached.page_number,
+      x: cached.x,
+      y: cached.y,
+      width: cached.width,
+      height: cached.height,
+      extracted_text: cached.extracted_text || highlight.extracted_text,
+      highlight_type: 'text',
+      rects: cached.rects,
+    };
   }
 
   $: if (totalPages > 0 && maxPageReached === 1) loadProgress();
@@ -615,7 +669,7 @@
 
   async function loadHighlights() {
     try {
-      highlights = await highlightClient.fetchHighlights();
+      highlights = (await highlightClient.fetchHighlights()).map(mergeCachedHighlightLocator);
       syncHighlightsStore();
     } catch (e) {
       console.error('[highlight] Failed to load highlights', e);
@@ -636,14 +690,16 @@
 
     try {
       const createdHighlight = await highlightClient.createHighlight(payload);
-      highlights = [...highlights, createdHighlight];
+      cacheHighlightLocator(createdHighlight.id, payload);
+      const mergedCreatedHighlight = mergeCachedHighlightLocator(createdHighlight);
+      highlights = [...highlights, mergedCreatedHighlight];
       if (highlightId) {
         highlightsStore.editHighlight(highlightId, {
           id: createdHighlight.id,
           serverPersisted: true,
         } as Partial<LibraryHighlight>);
       }
-      currentPage = createdHighlight.page_number;
+      currentPage = mergedCreatedHighlight.page_number;
       statusMessage = totalPages > 0
         ? `Showing page ${currentPage} of ${totalPages}`
         : `Saved highlight on page ${currentPage}`;
@@ -1053,7 +1109,7 @@
 
     .reader-wordmark {
       font-family: var(--font-serif);
-      font-size: 16px;
+      font-size: 18px;
       font-weight: 500;
       letter-spacing: 0.07em;
       color: var(--ink);
@@ -1064,7 +1120,7 @@
 
     .reader-nav-link {
       font-family: var(--font-serif);
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 300;
       letter-spacing: 0.06em;
       color: var(--ink-3);
@@ -1099,7 +1155,7 @@
     /* ── Topbar atoms ───────────────────── */
     .tb-label {
       font-family: var(--font-mono);
-      font-size: 10px;
+      font-size: 13px;
       font-weight: 400;
       color: var(--ink-2);
       letter-spacing: 0.04em;
@@ -1111,7 +1167,7 @@
     .tb-progress-fill--complete { background: linear-gradient(90deg, #36b37e, #65d19c); }
 
     .tb-status {
-      font-family: var(--font-mono); font-size: 9px; font-weight: 400;
+      font-family: var(--font-mono); font-size: 12px; font-weight: 400;
       letter-spacing: 0.08em; text-transform: uppercase;
       padding: 2px 8px; border-radius: 999px;
     }
@@ -1124,7 +1180,7 @@
     .tb-summary {
       list-style: none;
       display: flex; align-items: center; gap: 5px;
-      font-family: var(--font-serif); font-size: 10px; font-weight: 300;
+      font-family: var(--font-serif); font-size: 13px; font-weight: 300;
       letter-spacing: 0.05em; color: var(--ink-3);
       padding: 5px 9px;
       border: 1px solid rgba(26, 24, 20, 0.12); border-radius: 8px;
@@ -1133,7 +1189,7 @@
       transition: background 0.15s, color 0.15s;
     }
     .tb-summary:hover { background: var(--paper-2); color: var(--ink); }
-    .tb-summary::after { content: '\25BE'; font-size: 8px; margin-left: 2px; }
+    .tb-summary::after { content: '\25BE'; font-size: 11px; margin-left: 2px; }
     .tb-summary::-webkit-details-marker { display: none; }
 
     .tb-dropdown {
@@ -1151,7 +1207,7 @@
     .tb-dropdown-item {
       display: flex; align-items: center; width: 100%;
       padding: 8px 14px;
-      font-family: var(--font-mono); font-size: 10px; font-weight: 300;
+      font-family: var(--font-mono); font-size: 13px; font-weight: 300;
       letter-spacing: 0.05em; color: var(--ink);
       background: transparent; border: none; text-align: left;
       cursor: pointer; transition: background 0.12s;
@@ -1178,11 +1234,11 @@
     .tb-nav-btn:last-child  { border-left:  0.5px solid var(--rule); }
     .tb-nav-btn:hover:not(:disabled) { background: var(--paper-2); color: var(--ink); }
     .tb-nav-btn:disabled { opacity: 0.3; cursor: default; }
-    .tb-nav-page { padding: 5px 9px; }
+    .tb-nav-page { padding: 5px 9px; font-size: 11px; }
 
     /* ── Link buttons ────────────────── */
     .tb-link {
-      font-family: var(--font-serif); font-size: 10px; font-weight: 300;
+      font-family: var(--font-serif); font-size: 13px; font-weight: 300;
       letter-spacing: 0.05em; color: var(--ink-3);
       text-decoration: none; padding: 5px 9px;
       border: 1px solid rgba(26, 24, 20, 0.12); border-radius: 8px;
@@ -1212,7 +1268,7 @@
     }
     .hp-label {
       font-family: var(--font-mono);
-      font-size: 9px;
+      font-size: 12px;
       font-weight: 300;
       letter-spacing: 0.12em;
       text-transform: uppercase;
@@ -1221,14 +1277,14 @@
     }
     .hp-text {
       font-family: var(--font-serif);
-      font-size: 12px;
+      font-size: 14px;
       line-height: 1.6;
       color: var(--ink);
       margin: 0 0 8px;
     }
     .hp-note-preview {
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 300;
       color: var(--ink-2);
       border-left: 1.5px solid var(--accent-soft);
@@ -1245,7 +1301,7 @@
       align-items: center;
       gap: 5px;
       font-family: var(--font-mono);
-      font-size: 10px;
+      font-size: 13px;
       font-weight: 300;
       letter-spacing: 0.05em;
       color: var(--ink-3);
@@ -1283,7 +1339,7 @@
     .reader-kicker {
       margin: 0 0 10px;
       font-family: var(--font-serif);
-      font-size: 10px;
+      font-size: 13px;
       font-weight: 300;
       letter-spacing: 0.12em;
       text-transform: uppercase;
@@ -1353,7 +1409,7 @@
       padding: 14px 10px 12px;
       border-bottom: 1.5px solid transparent;
       font-family: var(--font-serif);
-      font-size: 10px;
+      font-size: 13px;
       font-weight: 400;
       letter-spacing: 0.09em;
       color: var(--ink-2);
@@ -1380,7 +1436,7 @@
       background: rgba(255, 253, 249, 0.92);
       color: var(--ink);
       font-family: var(--font-serif);
-      font-size: 11px;
+      font-size: 13px;
       outline: none;
     }
 
@@ -1403,7 +1459,7 @@
     .reader-stage .reader-topbar-actions a,
     .reader-sidebar .reader-sidebar-tab {
       font-family: var(--font-serif) !important;
-      font-size: 12px !important;
+      font-size: 14px !important;
       font-weight: 300 !important;
       letter-spacing: 0.08em !important;
     }
@@ -1430,7 +1486,7 @@
       background: var(--paper-bg) !important;
       border-color: var(--rule) !important;
       font-family: var(--font-serif) !important;
-      font-size: 12px !important;
+      font-size: 14px !important;
     }
 
     .reader-sidebar > section[data-testid='notes-sidebar'] {
@@ -1474,7 +1530,7 @@
     .reader-sidebar p.text-xs.uppercase,
     .reader-sidebar p.text-[10px].uppercase {
       font-family: var(--font-serif);
-      font-size: 12px !important;
+      font-size: 14px !important;
       font-weight: 300;
       letter-spacing: 0.09em !important;
       color: var(--ink-3) !important;
@@ -1536,7 +1592,7 @@
 
     .reader-sidebar [data-testid='notes-sidebar'] li > button:first-child span.text-sm {
       font-family: var(--font-serif);
-      font-size: 12px !important;
+      font-size: 14px !important;
       font-weight: 300;
       color: var(--ink) !important;
       white-space: normal;
@@ -1547,7 +1603,7 @@
       background: transparent !important;
       padding: 0 !important;
       font-family: var(--font-serif);
-      font-size: 10px !important;
+      font-size: 12px !important;
       font-weight: 300;
       letter-spacing: 0.08em;
       color: var(--ink-3) !important;
@@ -1634,7 +1690,7 @@
 
     .paper-sidebar-section-label {
       font-family: var(--font-mono);
-      font-size: 9px;
+      font-size: 12px;
       font-weight: 400;
       letter-spacing: 0.10em;
       text-transform: uppercase;
@@ -1648,7 +1704,7 @@
 
     .paper-sidebar-empty {
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 400;
       color: var(--ink-2);
       margin: 0;
@@ -1661,7 +1717,7 @@
       align-items: center;
       gap: 6px;
       font-family: var(--font-mono);
-      font-size: 10px;
+      font-size: 13px;
       font-weight: 300;
       color: var(--ink-2);
       padding: 4px 0;
@@ -1672,7 +1728,7 @@
 
     .paper-hl-note-btn {
       font-family: var(--font-mono);
-      font-size: 9px;
+      font-size: 12px;
       font-weight: 300;
       letter-spacing: 0.08em;
       color: var(--accent);
@@ -1686,7 +1742,7 @@
     }
 
     .paper-hl-del-btn {
-      font-size: 9px;
+      font-size: 12px;
       color: var(--ink-3);
       background: transparent;
       border: none;
@@ -1697,13 +1753,13 @@
     .paper-hl-del-btn:hover { color: #c44040; }
 
     .paper-add-note-btn {
-      font-size: 10px !important;
+      font-size: 12px !important;
       padding: 4px 10px !important;
     }
 
     .paper-note-group-label {
       font-family: var(--font-mono);
-      font-size: 9px;
+      font-size: 12px;
       font-weight: 400;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -1730,14 +1786,14 @@
 
     .paper-note-label {
       font-family: var(--font-mono);
-      font-size: 9px;
+      font-size: 12px;
       font-weight: 400;
       letter-spacing: 0.08em;
       color: var(--ink-2);
     }
 
     .paper-note-quote {
-      font-size: 11px;
+      font-size: 13px;
       font-style: italic;
       color: var(--ink-2);
       border-left: 2px solid var(--accent);
@@ -1764,14 +1820,14 @@
 
     .paper-note-body {
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 400;
       line-height: 1.65;
       color: var(--ink);
     }
 
     .paper-note-del {
-      font-size: 10px;
+      font-size: 13px;
       color: var(--ink-3);
       background: transparent;
       border: none;

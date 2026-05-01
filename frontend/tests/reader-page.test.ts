@@ -88,6 +88,8 @@ beforeEach(() => {
         width: payload.width,
         height: payload.height,
         extracted_text: payload.extracted_text,
+        highlight_type: payload.highlight_type,
+        rects: payload.rects,
         color: payload.color,
         format: payload.format,
         created_at: new Date().toISOString(),
@@ -266,6 +268,18 @@ describe('reader page', () => {
         y: 0.12,
         width: 0.175,
         height: 0.03,
+        highlight_type: 'text',
+        rects: [
+          {
+            x1: 0.125,
+            y1: 0.12,
+            x2: 0.3,
+            y2: 0.15,
+            width: 1,
+            height: 1,
+            pageNumber: 1,
+          },
+        ],
       });
     });
   });

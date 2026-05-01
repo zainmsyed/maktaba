@@ -27,6 +27,8 @@ EXPECTED_FK_ONDELETE = {
     "jobs": {("document_id",): "CASCADE"},
 }
 
+EXPECTED_HIGHLIGHT_COLUMNS = {"highlight_type", "rects"}
+
 EXPECTED_INDEX_SNIPPETS = {
     "idx_documents_deleted": ["USING btree", "deleted_at", "WHERE", "deleted_at IS NULL"],
     "idx_jobs_status": ["USING btree", "status", "WHERE", "pending", "processing"],
@@ -73,6 +75,13 @@ class SchemaSmokeTest(unittest.TestCase):
                 for foreign_key in self.inspector.get_foreign_keys(table_name, schema="public")
             }
             self.assertEqual(expected_constraints, foreign_keys)
+
+    def test_highlight_locator_columns_exist(self) -> None:
+        column_names = {
+            column["name"]
+            for column in self.inspector.get_columns("highlights", schema="public")
+        }
+        self.assertTrue(EXPECTED_HIGHLIGHT_COLUMNS.issubset(column_names))
 
     def test_critical_index_definitions_exist(self) -> None:
         with self.engine.connect() as connection:

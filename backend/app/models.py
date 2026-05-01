@@ -137,6 +137,10 @@ class Highlight(SQLModel, table=True):
             "color IN ('yellow', 'green', 'blue', 'red')",
             name="ck_highlights_color",
         ),
+        CheckConstraint(
+            "highlight_type IN ('text', 'area')",
+            name="ck_highlights_type",
+        ),
         Index("idx_highlights_document", "document_id"),
         Index("idx_highlights_fts", "fts", postgresql_using="gin"),
     )
@@ -149,6 +153,11 @@ class Highlight(SQLModel, table=True):
         ),
     )
     format: str = Field(sa_column=Column(String, nullable=False))
+    highlight_type: str = Field(
+        default="area",
+        sa_column=Column(String, nullable=False, server_default=text("'area'")),
+    )
+    rects: list[dict[str, Any]] | None = Field(default=None, sa_column=Column(JSONB))
     page_number: int | None = Field(default=None, sa_column=Column(Integer))
     x: float | None = Field(default=None, sa_column=Column(Float))
     y: float | None = Field(default=None, sa_column=Column(Float))

@@ -214,6 +214,9 @@ class HighlightCreate(BaseModel):
     width: float
     height: float
     color: str | None = None
+    extracted_text: str | None = None
+    highlight_type: str | None = None
+    rects: list[dict[str, object]] | None = None
 
 
 class NoteCreate(BaseModel):
@@ -272,7 +275,9 @@ def create_highlight(
             (payload.x + payload.width) * pw,
             (payload.y + payload.height) * ph,
         )
-        extracted_text = page.get_text("text", clip=clip) or ""
+        extracted_text = (payload.extracted_text or "").strip()
+        if not extracted_text:
+            extracted_text = page.get_text("text", clip=clip) or ""
         doc.close()
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
@@ -280,6 +285,8 @@ def create_highlight(
     highlight = Highlight(
         document_id=document_id,
         format="pdf",
+        highlight_type=payload.highlight_type if payload.highlight_type in {"text", "area"} else "area",
+        rects=payload.rects,
         page_number=payload.page_number,
         x=payload.x,
         y=payload.y,

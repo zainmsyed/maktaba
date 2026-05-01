@@ -456,7 +456,7 @@
   }
 
   .wordmark {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 500;
     letter-spacing: 0.07em;
     color: #1a1814;
@@ -469,7 +469,7 @@
 
   .nav-link {
     font-family: var(--font-serif);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 300;
     letter-spacing: 0.06em;
     color: #8a8680;
@@ -500,7 +500,7 @@
     background: rgba(242, 240, 235, 0.8);
     color: #1a1814;
     font-family: var(--font-serif);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 300;
     letter-spacing: 0.06em;
     cursor: pointer;
@@ -521,7 +521,7 @@
   }
 
   .sort-label {
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 300;
     color: #8a8680;
   }
@@ -532,7 +532,7 @@
     background: rgba(250, 248, 244, 0.95);
     color: #1a1814;
     padding: 7px 10px;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 300;
     font-family: var(--font-serif);
     outline: none;
@@ -555,7 +555,7 @@
   .eyebrow {
     margin: 0 0 8px;
     font-family: var(--font-serif);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 300;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -572,7 +572,7 @@
   .library-summary {
     margin: 4px 0 0;
     font-family: var(--font-serif);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 300;
     letter-spacing: 0.08em;
     color: #8a8680;
@@ -655,7 +655,7 @@
   .book-card-author {
     margin: 0;
     font-family: var(--font-serif);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 300;
     color: #8a8680;
   }
@@ -694,7 +694,7 @@
   .book-prog-label {
     flex-shrink: 0;
     font-family: var(--font-serif);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 300;
     color: #8a8680;
     white-space: nowrap;
@@ -709,7 +709,7 @@
 
   .book-card-date {
     font-family: var(--font-serif);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 300;
     color: #8a8680;
   }
@@ -726,7 +726,7 @@
     align-items: center;
     gap: 4px;
     font-family: var(--font-serif);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 400;
     color: #8a8680;
   }

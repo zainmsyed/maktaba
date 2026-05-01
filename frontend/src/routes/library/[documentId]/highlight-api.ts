@@ -1,8 +1,19 @@
 import type { Highlight } from 'svelte-pdf-highlighter';
 
+export type BackendHighlightRect = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  width: number;
+  height: number;
+  pageNumber: number;
+};
+
 export type BackendHighlight = {
   id: string;
   format?: string | null;
+  highlight_type?: 'text' | 'area' | null;
   color?: string | null;
   extracted_text?: string | null;
   page_number: number;
@@ -10,6 +21,7 @@ export type BackendHighlight = {
   y: number;
   width: number;
   height: number;
+  rects?: BackendHighlightRect[] | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -36,6 +48,8 @@ export type HighlightCreatePayload = {
   width: number;
   height: number;
   extracted_text?: string;
+  highlight_type?: 'text' | 'area';
+  rects?: BackendHighlightRect[];
 };
 
 export type NoteCreatePayload = {
@@ -51,22 +65,57 @@ function clamp01(value: number) {
   return Math.min(1, Math.max(0, value));
 }
 
+function normalizeRect(rect: BackendHighlightRect, fallbackPageNumber: number): BackendHighlightRect {
+  const baseWidth = rect.width || 1;
+  const baseHeight = rect.height || 1;
+  const x1 = Math.min(rect.x1, rect.x2) / baseWidth;
+  const y1 = Math.min(rect.y1, rect.y2) / baseHeight;
+  const x2 = Math.max(rect.x1, rect.x2) / baseWidth;
+  const y2 = Math.max(rect.y1, rect.y2) / baseHeight;
+
+  return {
+    x1: clamp01(x1),
+    y1: clamp01(y1),
+    x2: clamp01(x2),
+    y2: clamp01(y2),
+    width: 1,
+    height: 1,
+    pageNumber: rect.pageNumber ?? fallbackPageNumber,
+  };
+}
+
+function denormalizeRect(rect: BackendHighlightRect, fallbackPageNumber: number): BackendHighlightRect {
+  return {
+    x1: rect.x1,
+    y1: rect.y1,
+    x2: rect.x2,
+    y2: rect.y2,
+    width: rect.width || 1,
+    height: rect.height || 1,
+    pageNumber: rect.pageNumber ?? fallbackPageNumber,
+  };
+}
+
 export function backendToLibraryHighlight(highlight: BackendHighlight): LibraryHighlight {
+  const boundingRect = {
+    x1: highlight.x,
+    y1: highlight.y,
+    x2: highlight.x + highlight.width,
+    y2: highlight.y + highlight.height,
+    width: 1,
+    height: 1,
+    pageNumber: highlight.page_number,
+  };
+  const rects = (highlight.rects ?? []).map((rect) => denormalizeRect(rect, highlight.page_number));
+  const type = highlight.highlight_type === 'text' && rects.length > 0 ? 'text' : 'area';
+
   return {
     id: highlight.id,
-    type: 'area',
+    type,
     content: highlight.extracted_text ? { text: highlight.extracted_text } : {},
     position: {
-      boundingRect: {
-        x1: highlight.x,
-        y1: highlight.y,
-        x2: highlight.x + highlight.width,
-        y2: highlight.y + highlight.height,
-        width: 1,
-        height: 1,
-        pageNumber: highlight.page_number,
-      },
-      rects: [],
+      boundingRect,
+      rects: type === 'text' ? rects : [],
     },
     color_index: 0,
     serverPersisted: true,
@@ -88,13 +137,19 @@ export function buildCreatePayload(highlight: LibraryHighlight): HighlightCreate
 
   if (width < 0.005 || height < 0.005) return null;
 
+  const pageNumber = boundingRect.pageNumber;
+  const rects = (highlight.position?.rects ?? []).map((rect) => normalizeRect(rect, pageNumber));
+  const highlightType = highlight.type === 'text' && rects.length > 0 ? 'text' : 'area';
+
   return {
-    page_number: boundingRect.pageNumber,
+    page_number: pageNumber,
     x: clamp01(x1 / baseWidth),
     y: clamp01(y1 / baseHeight),
     width: clamp01(width),
     height: clamp01(height),
     extracted_text: highlight.content?.text?.trim() ?? '',
+    highlight_type: highlightType,
+    rects,
   };
 }
 
@@ -121,6 +176,8 @@ export function createHighlightClient(apiUrl: string, documentId: string) {
           format: 'pdf',
           color: 'yellow',
           extracted_text: payload.extracted_text ?? '',
+          highlight_type: payload.highlight_type ?? 'area',
+          rects: payload.rects ?? [],
           page_number: payload.page_number,
           x: payload.x,
           y: payload.y,
