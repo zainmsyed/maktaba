@@ -439,7 +439,7 @@
       </div>
 
       <div class="topbar-right">
-        <label class="upload-btn">
+        <label class="upload-btn paper-btn-accent">
           <input type="file" accept=".pdf,.epub" class="sr-only" on:change={onFileChange} />
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -542,17 +542,16 @@
   .library-page {
     min-height: 100vh;
     padding: 0;
-    color: #1a1814;
-    font-family: 'Lora', Georgia, serif;
-    color-scheme: light;
-    background: linear-gradient(180deg, #f7f4ee 0%, #e8e5de 100%);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    background: var(--app-bg);
   }
 
   .library-shell {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(180deg, #f7f4ee 0%, #e8e5de 100%);
+    background: transparent;
   }
 
   .topbar {
@@ -561,8 +560,8 @@
     justify-content: space-between;
     gap: 16px;
     padding: 14px 22px;
-    background: rgba(250, 248, 244, 0.94);
-    border-bottom: 1px solid rgba(26, 24, 20, 0.08);
+    background: var(--topbar-bg);
+    border-bottom: 1px solid var(--rule);
     backdrop-filter: blur(8px);
   }
 
@@ -577,7 +576,7 @@
     font-size: 18px;
     font-weight: 500;
     letter-spacing: 0.07em;
-    color: #1a1814;
+    color: var(--ink);
   }
 
   .nav-links {
@@ -590,7 +589,7 @@
     font-size: 14px;
     font-weight: 300;
     letter-spacing: 0.06em;
-    color: #8a8680;
+    color: var(--ink-3);
     padding: 5px 10px;
     border-radius: 5px;
     transition: background 0.15s, color 0.15s;
@@ -598,8 +597,8 @@
 
   .nav-link:hover,
   .nav-link.active {
-    color: #1a1814;
-    background: rgba(242, 240, 235, 0.9);
+    color: var(--ink);
+    background: var(--paper-2);
   }
 
   .topbar-right {
@@ -612,23 +611,14 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 9px 14px;
-    border-radius: 999px;
-    border: 1px solid rgba(26, 24, 20, 0.14);
-    background: rgba(242, 240, 235, 0.8);
-    color: #1a1814;
-    font-family: var(--font-serif);
-    font-size: 13px;
-    font-weight: 300;
-    letter-spacing: 0.06em;
+    padding: 6px 14px;
+    border-radius: 6px;
     cursor: pointer;
-    transition: transform 0.15s, background 0.15s, border-color 0.15s;
+    text-transform: none;
   }
 
   .upload-btn:hover {
     transform: translateY(-1px);
-    background: #f0e6dc;
-    border-color: rgba(26, 24, 20, 0.18);
   }
 
   .sort-control {
@@ -641,14 +631,14 @@
   .sort-label {
     font-size: 13px;
     font-weight: 300;
-    color: #8a8680;
+    color: var(--ink-3);
   }
 
   .sort-select {
-    border: 1px solid rgba(26, 24, 20, 0.12);
+    border: 1px solid var(--rule);
     border-radius: 8px;
-    background: rgba(250, 248, 244, 0.95);
-    color: #1a1814;
+    background: var(--panel-bg);
+    color: var(--ink);
     padding: 7px 10px;
     font-size: 13px;
     font-weight: 300;
@@ -667,19 +657,20 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 7px 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(26, 24, 20, 0.12);
-    background: rgba(250, 248, 244, 0.95);
-    transition: border-color 0.15s, box-shadow 0.15s;
+    padding: 7px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--rule);
+    background: var(--panel-bg);
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   }
   .search-box--active {
-    border-color: rgba(26, 24, 20, 0.22);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--rule));
+    background: var(--panel-bg-strong);
+    box-shadow: var(--shadow-soft);
   }
 
   .search-icon {
-    color: #8a8680;
+    color: var(--ink-3);
     flex-shrink: 0;
   }
 
@@ -687,20 +678,20 @@
     flex: 1;
     border: none;
     background: transparent;
-    font-family: var(--font-serif);
-    font-size: 13px;
-    font-weight: 300;
-    color: #1a1814;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--ink);
     outline: none;
     min-width: 0;
   }
   .search-input::placeholder {
-    color: #8a8680;
+    color: var(--ink-3);
   }
 
   .search-spinner {
     font-size: 14px;
-    color: #8a8680;
+    color: var(--ink-3);
     animation: spin 1s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -711,10 +702,10 @@
     left: 0;
     right: 0;
     z-index: 50;
-    background: rgba(250, 248, 244, 0.99);
-    border: 0.5px solid rgba(26, 24, 20, 0.14);
+    background: var(--panel-bg-strong);
+    border: 0.5px solid var(--rule);
     border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.08);
+    box-shadow: var(--shadow-strong);
     max-height: 380px;
     overflow-y: auto;
     padding: 6px 0;
@@ -725,11 +716,11 @@
     padding: 14px 16px;
     font-family: var(--font-serif);
     font-size: 13px;
-    color: #8a8680;
+    color: var(--ink-3);
     text-align: center;
   }
   .search-error {
-    color: #be123c;
+    color: #c44040;
   }
 
   .search-result {
@@ -746,7 +737,7 @@
     transition: background 0.12s;
   }
   .search-result:hover {
-    background: rgba(242, 240, 235, 0.9);
+    background: var(--paper-2);
   }
 
   .search-result-type {
@@ -755,17 +746,17 @@
     font-weight: 400;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #8a8680;
+    color: var(--ink-3);
     padding: 1px 6px;
     border-radius: 999px;
-    background: rgba(232, 229, 222, 0.7);
+    background: var(--paper-2);
   }
 
   .search-result-title {
     font-family: var(--font-serif);
     font-size: 13px;
     font-weight: 500;
-    color: #1a1814;
+    color: var(--ink);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -774,7 +765,7 @@
   .search-result-page {
     font-family: var(--font-mono);
     font-size: 11px;
-    color: #8a8680;
+    color: var(--ink-3);
     white-space: nowrap;
   }
 
@@ -784,7 +775,7 @@
     font-family: var(--font-serif);
     font-size: 12px;
     font-weight: 300;
-    color: #5b544a;
+    color: var(--ink-2);
     line-height: 1.45;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -813,14 +804,14 @@
     font-weight: 300;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #8a8680;
+    color: var(--ink-3);
   }
 
   .library-title {
     margin: 0;
     font-size: 20px;
     font-weight: 500;
-    color: #1a1814;
+    color: var(--ink);
   }
 
   .library-summary {
@@ -829,25 +820,25 @@
     font-size: 13px;
     font-weight: 300;
     letter-spacing: 0.08em;
-    color: #8a8680;
+    color: var(--ink-3);
   }
 
   .library-state {
     max-width: 1280px;
     margin: 0 auto;
-    border: 1px solid rgba(26, 24, 20, 0.08);
+    border: 1px solid var(--rule);
     border-radius: 18px;
-    background: rgba(250, 248, 244, 0.88);
+    background: var(--panel-bg);
     padding: 26px 24px;
     text-align: center;
-    color: #4a4640;
-    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.06);
+    color: var(--ink-2);
+    box-shadow: var(--shadow-soft);
   }
 
   .library-state.error {
-    border-color: rgba(185, 28, 28, 0.2);
-    background: rgba(254, 242, 242, 0.9);
-    color: #991b1b;
+    border-color: rgba(196, 64, 64, 0.24);
+    background: rgba(196, 64, 64, 0.08);
+    color: #c44040;
   }
 
   .books-grid {
@@ -863,9 +854,9 @@
     flex-direction: column;
     border-radius: 12px;
     overflow: hidden;
-    background: rgba(250, 248, 244, 0.95);
-    border: 1px solid rgba(26, 24, 20, 0.08);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+    background: var(--panel-bg-strong);
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow-soft);
     transition: transform 0.15s, box-shadow 0.15s;
     text-decoration: none;
     color: inherit;
@@ -874,7 +865,7 @@
 
   .book-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-strong);
   }
 
   .book-card-body {
@@ -898,7 +889,7 @@
     font-size: 14px;
     line-height: 1.35;
     font-weight: 500;
-    color: #1a1814;
+    color: var(--ink);
     min-height: 2.4em;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -911,7 +902,7 @@
     font-family: var(--font-serif);
     font-size: 14px;
     font-weight: 300;
-    color: #8a8680;
+    color: var(--ink-3);
   }
 
   .status-icon {
@@ -929,10 +920,10 @@
     justify-content: center;
     border-radius: 6px;
     cursor: pointer;
-    color: #7f1d1d;
+    color: #c44040;
   }
   .delete-btn:hover {
-    background: rgba(0,0,0,0.03);
+    background: rgba(196,64,64,0.08);
   }
 
   .book-progress-row {
@@ -945,7 +936,7 @@
     flex: 1;
     height: 2px;
     border-radius: 999px;
-    background: rgba(232, 229, 222, 0.9);
+    background: var(--paper-3);
     overflow: hidden;
   }
 
@@ -965,7 +956,7 @@
     font-family: var(--font-serif);
     font-size: 12px;
     font-weight: 300;
-    color: #8a8680;
+    color: var(--ink-3);
     white-space: nowrap;
   }
 
@@ -980,7 +971,7 @@
     font-family: var(--font-serif);
     font-size: 12px;
     font-weight: 300;
-    color: #8a8680;
+    color: var(--ink-3);
   }
 
   .book-card-actions {
@@ -1005,7 +996,7 @@
     font-family: var(--font-serif);
     font-size: 13px;
     font-weight: 400;
-    color: #8a8680;
+    color: var(--ink-3);
   }
 
   @media (max-width: 768px) {

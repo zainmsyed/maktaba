@@ -19,9 +19,42 @@
   --hl-y:    rgba(245, 210, 100, 0.38);
   --hl-g:    rgba(100, 185, 130, 0.32);
   --hl-b:    rgba(100, 150, 220, 0.30);
+  --hl-r:    rgba(196, 64, 64, 0.26);
+  --topbar-bg: rgba(250, 248, 244, 0.94);
+  --panel-bg: rgba(255, 253, 249, 0.92);
+  --panel-bg-strong: rgba(252, 251, 248, 0.96);
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-strong: 0 10px 30px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  --app-bg:
+    radial-gradient(circle at top, rgba(184, 92, 46, 0.08), transparent 38%),
+    linear-gradient(180deg, #f7f4ee 0%, #e8e5de 100%);
 
   --font-serif: 'Lora', Georgia, serif;
   --font-mono:  'Lora', Georgia, serif;
+}
+
+html[data-theme='dark'] {
+  --paper: #1f1a16;
+  --paper-2: #2a231e;
+  --paper-3: #16120f;
+  --ink: #f1e7d8;
+  --ink-2: #d1c2ae;
+  --ink-3: #a89781;
+  --accent: #d08a5b;
+  --accent-soft: rgba(208, 138, 91, 0.16);
+  --rule: rgba(241, 231, 216, 0.14);
+  --hl-y: rgba(245, 210, 100, 0.24);
+  --hl-g: rgba(100, 185, 130, 0.22);
+  --hl-b: rgba(100, 150, 220, 0.24);
+  --hl-r: rgba(196, 64, 64, 0.22);
+  --topbar-bg: rgba(31, 26, 22, 0.92);
+  --panel-bg: rgba(39, 33, 28, 0.9);
+  --panel-bg-strong: rgba(34, 28, 24, 0.96);
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.28);
+  --shadow-strong: 0 14px 34px rgba(0, 0, 0, 0.36), 0 2px 10px rgba(0, 0, 0, 0.18);
+  --app-bg:
+    radial-gradient(circle at top, rgba(208, 138, 91, 0.12), transparent 34%),
+    linear-gradient(180deg, #16120f 0%, #0f0c0a 100%);
 }
 
 /* 2. Global reset for paper pages */

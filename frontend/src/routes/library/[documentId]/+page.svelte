@@ -1407,15 +1407,10 @@
   <title>{documentTitle} — Maktaba Reader</title>
   <style>
     :root {
-      --paper-bg: #fcfbf8;
-      --paper-bg-2: #e7dfd1;
-      --paper-bg-3: #cfc4b1;
-      --ink: #16130f;
-      --ink-2: #2a241d;
-      --ink-3: #5b544a;
-      --accent: #a64f25;
-      --accent-soft: #e2cfbd;
-      --rule: rgba(22, 19, 15, 0.24);
+      --paper-bg: var(--paper);
+      --paper-bg-2: var(--paper-2);
+      --paper-bg-3: var(--paper-3);
+      --accent-soft: var(--accent-soft);
     }
 
     html,
@@ -1427,7 +1422,6 @@
       margin: 0;
       background: var(--paper-bg-3);
       color: var(--ink);
-      color-scheme: light;
       font-family: 'Lora', Georgia, serif;
       overflow: hidden;
     }
@@ -1454,8 +1448,8 @@
       height: 61px;
       box-sizing: border-box;
       padding: 14px 22px;
-      background: rgba(250, 248, 244, 0.94);
-      border-bottom: 1px solid rgba(26, 24, 20, 0.08);
+      background: var(--topbar-bg);
+      border-bottom: 1px solid var(--rule);
       backdrop-filter: blur(8px);
     }
 
@@ -1491,7 +1485,7 @@
     }
     .reader-nav-link:hover, .reader-nav-link.active {
       color: var(--ink);
-      background: rgba(242, 240, 235, 0.9);
+      background: var(--paper-2);
     }
 
     .reader-topbar-center {
@@ -1543,9 +1537,9 @@
       font-family: var(--font-serif); font-size: 13px; font-weight: 300;
       letter-spacing: 0.05em; color: var(--ink-3);
       padding: 5px 9px;
-      border: 1px solid rgba(26, 24, 20, 0.12); border-radius: 8px;
+      border: 1px solid var(--rule); border-radius: 8px;
       cursor: pointer; user-select: none;
-      background: rgba(250, 248, 244, 0.95); white-space: nowrap;
+      background: var(--panel-bg); white-space: nowrap;
       transition: background 0.15s, color 0.15s;
     }
     .tb-summary:hover { background: var(--paper-2); color: var(--ink); }
@@ -1555,10 +1549,10 @@
     .tb-dropdown {
       position: absolute; top: calc(100% + 4px); left: 0; z-index: 200;
       min-width: 150px;
-      background: rgba(250,248,244,0.99);
-      border: 0.5px solid rgba(26, 24, 20, 0.14);
+      background: var(--panel-bg-strong);
+      border: 0.5px solid var(--rule);
       border-radius: 8px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.08);
+      box-shadow: var(--shadow-strong);
       backdrop-filter: none;
       padding: 4px 0;
     }
@@ -1578,13 +1572,13 @@
 
     .tb-dropdown-divider { height: 0.5px; background: var(--rule); margin: 4px 0; }
 
-    .tb-slider-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.28); }
+    .tb-slider-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: color-mix(in srgb, var(--panel-bg) 78%, transparent); }
     .tb-slider-btn { font-size: 14px; color: var(--ink-3); background: transparent; border: none; cursor: pointer; padding: 0 2px; flex-shrink: 0; line-height: 1; }
     .tb-slider-btn:hover { color: var(--ink); }
     .tb-slider { flex: 1; accent-color: var(--accent); }
 
     /* ── Page navigation ──────────────── */
-    .tb-nav { display: flex; align-items: center; border: 1px solid rgba(26, 24, 20, 0.12); border-radius: 8px; overflow: hidden; background: rgba(250, 248, 244, 0.95); }
+    .tb-nav { display: flex; align-items: center; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--panel-bg); }
     .tb-nav-btn {
       font-family: var(--font-mono); font-size: 13px; color: var(--ink-3);
       background: transparent; border: none; padding: 5px 9px; cursor: pointer;
@@ -1601,8 +1595,8 @@
       font-family: var(--font-serif); font-size: 13px; font-weight: 300;
       letter-spacing: 0.05em; color: var(--ink-3);
       text-decoration: none; padding: 5px 9px;
-      border: 1px solid rgba(26, 24, 20, 0.12); border-radius: 8px;
-      background: rgba(250, 248, 244, 0.95);
+      border: 1px solid var(--rule); border-radius: 8px;
+      background: var(--panel-bg);
       white-space: nowrap; transition: background 0.15s, color 0.15s;
     }
     .tb-link:hover { background: var(--paper-2); color: var(--ink); }
@@ -1776,7 +1770,7 @@
       border-radius: 0 !important;
       border: 0 !important;
       border-left: 1px solid var(--rule) !important;
-      box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.35) !important;
+      box-shadow: inset 1px 0 0 color-mix(in srgb, var(--ink) 8%, transparent) !important;
       background: var(--paper-bg) !important;
     }
 
@@ -1785,7 +1779,7 @@
       gap: 12px;
       padding: 0 14px;
       border-bottom: 1px solid var(--rule);
-      background: rgba(252, 251, 248, 0.96);
+      background: var(--panel-bg-strong);
       flex-shrink: 0;
     }
 
@@ -1807,25 +1801,25 @@
     }
 
     .reader-sidebar .reader-sidebar-tabs .reader-sidebar-tab.active {
-      color: #9a4a4a !important;
+      color: var(--accent) !important;
       border-color: transparent !important;
-      border-bottom: 2px solid #9a4a4a !important;
+      border-bottom: 2px solid var(--accent) !important;
       opacity: 1;
     }
 
     .reader-sidebar-search {
       padding: 10px 16px;
       border-bottom: 1px solid var(--rule);
-      background: rgba(252, 251, 248, 0.96);
+      background: var(--panel-bg-strong);
       flex-shrink: 0;
     }
 
     .reader-sidebar-search input {
       width: 100%;
-      border: 1px solid rgba(22, 19, 15, 0.18);
+      border: 1px solid var(--rule);
       border-radius: 7px;
       padding: 7px 10px;
-      background: rgba(255, 253, 249, 0.92);
+      background: var(--panel-bg);
       color: var(--ink);
       font-family: var(--font-serif);
       font-size: 13px;
@@ -1841,7 +1835,7 @@
       border: 0 !important;
       border-bottom: 1px solid var(--rule) !important;
       border-radius: 0 !important;
-      background: rgba(252, 251, 248, 0.96) !important;
+      background: var(--panel-bg-strong) !important;
       box-shadow: none !important;
       padding: 14px 18px 16px !important;
     }
@@ -2155,13 +2149,13 @@
     }
 
     .paper-note-item {
-      border-bottom: 1px solid rgba(22, 19, 15, 0.10);
-      border-top: 1px solid rgba(255, 255, 255, 0.6);
+      border-bottom: 1px solid var(--rule);
+      border-top: 1px solid color-mix(in srgb, var(--ink) 6%, transparent);
       padding: 10px 14px;
-      background: rgba(255, 253, 249, 0.98);
+      background: var(--panel-bg);
       transition: background 0.12s, box-shadow 0.12s;
     }
-    .paper-note-item:hover { background: #ffffff; }
+    .paper-note-item:hover { background: var(--paper); }
 
     .paper-annotation-card {
       cursor: pointer;
@@ -2173,7 +2167,7 @@
     }
 
     .paper-document-note-card {
-      background: rgba(250, 247, 241, 0.78);
+      background: color-mix(in srgb, var(--paper-2) 72%, transparent);
     }
 
     .paper-note-loc {
@@ -2572,7 +2566,7 @@
 
 <style>
   :global(.reader-pdf-shell .PdfHighlighter) {
-    background: var(--paper-bg);
+    background: var(--paper-bg-3);
     overflow-anchor: none;
   }
 
@@ -2582,15 +2576,20 @@
 
   :global(.reader-pdf-shell .pdfViewer .page) {
     margin: 0 auto;
-    box-shadow: 0 4px 24px rgb(0 0 0 / 0.15);
+    background: var(--paper-bg);
+    box-shadow: var(--shadow-strong);
     overflow-anchor: none;
   }
 
+  :global(html[data-theme='dark'] .reader-pdf-shell canvas) {
+    filter: invert(0.91) hue-rotate(180deg) brightness(0.92) contrast(0.94);
+  }
+
   /* thin modern scrollbar */
-  :global(.reader-pdf-shell .PdfHighlighter) { scrollbar-width: thin; scrollbar-color: rgba(22, 19, 15, 0.28) transparent; }
+  :global(.reader-pdf-shell .PdfHighlighter) { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 28%, transparent) transparent; }
   :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar) { width: 7px; height: 7px; }
   :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar-track) { background: transparent; }
-  :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar-thumb) { background: rgba(22, 19, 15, 0.28); border-radius: 3px; }
-  :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar-thumb:hover) { background: rgba(22, 19, 15, 0.45); }
+  :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar-thumb) { background: color-mix(in srgb, var(--ink) 28%, transparent); border-radius: 3px; }
+  :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar-thumb:hover) { background: color-mix(in srgb, var(--ink) 45%, transparent); }
   :global(.reader-pdf-shell .PdfHighlighter::-webkit-scrollbar-corner) { background: transparent; }
 </style>

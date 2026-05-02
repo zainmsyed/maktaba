@@ -153,8 +153,9 @@
       if (tab) switchTab(tab);
     }));
 
-    document.querySelectorAll('.cp').forEach((el) => el.addEventListener('click', function () {
-      setColorFilter((this as HTMLElement).getAttribute('data-color') || 'y');
+    document.querySelectorAll('.cp').forEach((el) => el.addEventListener('click', (event) => {
+      const target = event.currentTarget as HTMLElement | null;
+      setColorFilter(target?.getAttribute('data-color') || 'y');
     }));
 
     const searchInput = document.getElementById('note-search') as HTMLInputElement | null;
@@ -172,24 +173,11 @@
   <style>
 /* copy of the reference CSS (trimmed for demo) */
 * { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --ink: #1a1814;
-  --ink-2: #4a4640;
-  --ink-3: #8a8680;
-  --paper: #faf8f4;
-  --paper-2: #f2f0eb;
-  --paper-3: #e8e5de;
-  --accent: #b85c2e;
-  --accent-soft: #f0e6dc;
-  --rule: rgba(26,24,20,0.1);
-  --hl-y: rgba(245,210,100,0.38);
-  --hl-g: rgba(100,185,130,0.32);
-  --hl-b: rgba(100,150,220,0.3);
-}
+:root {}
 html, body { width: 100%; height: 100%; font-family: 'Lora', Georgia, serif; background: var(--paper-2); color: var(--ink); overflow: hidden; }
 body { margin: 0; }
 .shell { display: grid; grid-template-rows: 46px minmax(0, 1fr); grid-template-columns: minmax(0, 1fr) 320px; width: 100vw; height: 100vh; border-radius: 0; overflow: hidden; background: var(--paper); box-shadow: none; }
-.topbar { grid-column: 1 / -1; display: flex; align-items: center; padding: 0 22px; border-bottom: 0.5px solid var(--rule); gap: 16px; background: var(--paper); }
+.topbar { grid-column: 1 / -1; display: flex; align-items: center; padding: 0 22px; border-bottom: 0.5px solid var(--rule); gap: 16px; background: var(--topbar-bg); }
 .wordmark { font-family: 'Lora', serif; font-size: 15px; font-weight: 500; letter-spacing: 0.07em; color: var(--ink); margin-right: 4px; }
 .nav-links { display: flex; gap: 2px; flex: 1; }
 .nav-link { font-family: var(--font-serif); font-size: 11px; font-weight: 300; color: var(--ink-3); letter-spacing: 0.06em; padding: 5px 10px; cursor: pointer; border-radius: 5px; transition: color 0.15s, background 0.15s; user-select: none; }

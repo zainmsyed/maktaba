@@ -27,75 +27,165 @@
 
 <svelte:head>
   <title>Maktaba</title>
-  <meta
-    name="description"
-    content="Maktaba is a self-hosted reading and note-taking app."
-  />
+  <meta name="description" content="Maktaba is a self-hosted reading and note-taking app." />
 </svelte:head>
 
-<main class="mx-auto flex min-h-screen max-w-5xl items-center px-6 py-12 sm:px-10 lg:px-12">
-  <section class="w-full rounded-3xl border border-slate-700/70 bg-slate-900/75 p-8 shadow-2xl shadow-cyan-950/20 backdrop-blur sm:p-10">
-    <div class="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
-      <div class="max-w-2xl space-y-6">
-        <div class="space-y-3">
-          <p class="text-sm font-semibold uppercase tracking-[0.3em] text-cyan-300">
-            Maktaba scaffold
-          </p>
-          <h1 class="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-            Read, highlight, and note — locally.
-          </h1>
-          <p class="max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
-            The frontend shell is running inside Docker and waiting on the FastAPI backend.
-            This is the first step toward a self-hosted PDF and EPUB reading workspace.
-          </p>
-        </div>
+<main class="landing-page">
+  <section class="landing-shell">
+    <div class="landing-copy">
+      <p class="landing-eyebrow">Maktaba</p>
+      <h1 class="landing-title">Read, highlight, and note — locally.</h1>
+      <p class="landing-body">
+        A self-hosted reading workspace for PDFs and EPUBs with highlights, notes, and search.
+      </p>
 
-        <div class="flex flex-wrap gap-3">
-          <a
-            class="inline-flex items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-300/15"
-            href={healthUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open backend health route
-          </a>
-          <div class="inline-flex items-center rounded-full border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300">
-            API: {data.apiUrl}
-          </div>
-        </div>
+      <div class="landing-actions">
+        <a class="paper-btn-accent" href="/library">Open library</a>
+        <a class="paper-btn" href={healthUrl} target="_blank" rel="noreferrer">Backend health</a>
       </div>
-
-      <aside class="min-w-72 rounded-2xl border border-slate-700 bg-slate-950/70 p-6">
-        <p class="text-sm font-medium uppercase tracking-[0.25em] text-slate-400">Runtime status</p>
-        <div class="mt-4 flex items-center gap-3">
-          <span
-            class={`inline-flex rounded-full px-3 py-1 text-sm font-semibold uppercase tracking-[0.2em] ${
-              backendStatus === 'ok'
-                ? 'bg-emerald-500/15 text-emerald-300'
-                : backendStatus === 'offline'
-                  ? 'bg-rose-500/15 text-rose-300'
-                  : 'bg-amber-500/15 text-amber-300'
-            }`}
-          >
-            {backendStatus}
-          </span>
-        </div>
-        <p class="mt-4 text-sm leading-6 text-slate-300">{backendDetail}</p>
-        <dl class="mt-6 space-y-4 text-sm text-slate-300">
-          <div class="flex items-start justify-between gap-4 border-t border-slate-800 pt-4">
-            <dt class="text-slate-500">Frontend</dt>
-            <dd class="text-right text-slate-100">SvelteKit</dd>
-          </div>
-          <div class="flex items-start justify-between gap-4 border-t border-slate-800 pt-4">
-            <dt class="text-slate-500">Backend</dt>
-            <dd class="text-right text-slate-100">FastAPI</dd>
-          </div>
-          <div class="flex items-start justify-between gap-4 border-t border-slate-800 pt-4">
-            <dt class="text-slate-500">Storage</dt>
-            <dd class="text-right text-slate-100">Postgres + /data</dd>
-          </div>
-        </dl>
-      </aside>
     </div>
+
+    <aside class="status-card">
+      <p class="status-label">Runtime status</p>
+      <div class="status-row">
+        <span class:status-pill={true} class:status-pill--ok={backendStatus === 'ok'} class:status-pill--offline={backendStatus === 'offline'}>
+          {backendStatus}
+        </span>
+      </div>
+      <p class="status-detail">{backendDetail}</p>
+      <dl class="status-list">
+        <div>
+          <dt>Frontend</dt>
+          <dd>SvelteKit</dd>
+        </div>
+        <div>
+          <dt>Backend</dt>
+          <dd>FastAPI</dd>
+        </div>
+        <div>
+          <dt>Storage</dt>
+          <dd>Postgres + /data</dd>
+        </div>
+      </dl>
+    </aside>
   </section>
 </main>
+
+<style>
+  .landing-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 32px;
+    color: var(--ink);
+  }
+
+  .landing-shell {
+    width: min(1100px, 100%);
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, 380px);
+    gap: 28px;
+    align-items: start;
+  }
+
+  .landing-copy,
+  .status-card {
+    border: 1px solid var(--rule);
+    background: var(--panel-bg-strong);
+    box-shadow: var(--shadow-soft);
+    border-radius: 22px;
+  }
+
+  .landing-copy {
+    padding: 40px;
+  }
+
+  .landing-eyebrow,
+  .status-label {
+    margin: 0 0 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .landing-title {
+    margin: 0 0 16px;
+    font-size: clamp(2.2rem, 5vw, 4rem);
+    line-height: 1.05;
+    color: var(--ink);
+  }
+
+  .landing-body,
+  .status-detail,
+  .status-list {
+    color: var(--ink-2);
+    line-height: 1.7;
+  }
+
+  .landing-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .status-card {
+    padding: 24px;
+  }
+
+  .status-row {
+    margin-bottom: 14px;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: var(--paper-2);
+    color: var(--ink-2);
+  }
+
+  .status-pill--ok {
+    background: rgba(100, 185, 130, 0.16);
+    color: #3a9e5f;
+  }
+
+  .status-pill--offline {
+    background: rgba(196, 64, 64, 0.14);
+    color: #c44040;
+  }
+
+  .status-list {
+    margin-top: 18px;
+  }
+
+  .status-list div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .status-list dt {
+    color: var(--ink-3);
+  }
+
+  @media (max-width: 860px) {
+    .landing-shell {
+      grid-template-columns: 1fr;
+    }
+
+    .landing-copy {
+      padding: 28px;
+    }
+  }
+</style>
