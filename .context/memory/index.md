@@ -59,3 +59,5 @@ package.json — Root package.json
 scripts/run-integration-tests.sh — Helper script to run integration tests (local/docker)
 
 frontend/tests/mocks/NotePopupTextareaHarness.svelte — (undescribed)
+frontend/src/lib/progress.ts — (undescribed)
+frontend/tests/progress.test.ts — (undescribed)

@@ -561,6 +561,77 @@ class DocumentUploadTests(unittest.TestCase):
         notes2 = {note["id"]: note for note in list_resp2.json()["notes"]}
         self.assertEqual(notes2[attached_note["id"]]["content"], "Updated highlight note")
 
+    def test_search_highlights_and_notes(self) -> None:
+        pdf_bytes = self._build_pdf_bytes(
+            title="Search Test PDF",
+            author="Search Test",
+            creation_date="D:20240424010203Z",
+        )
+
+        response = self.client.post(
+            "/api/documents",
+            files={"file": ("search.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(response.status_code, 201)
+        document_id = UUID(response.json()["document"]["id"])
+
+        with self.db_module.Session(self.db_module.engine) as session:
+            highlight = Highlight(
+                document_id=document_id,
+                format="pdf",
+                page_number=3,
+                x=0.1,
+                y=0.2,
+                width=0.3,
+                height=0.1,
+                extracted_text="quantum entanglement paradox",
+                color="yellow",
+            )
+            session.add(highlight)
+            session.commit()
+            session.refresh(highlight)
+            highlight_id = highlight.id
+
+            note = Note(
+                document_id=document_id,
+                highlight_id=highlight_id,
+                content="Notes about quantum mechanics",
+            )
+            session.add(note)
+            session.commit()
+            session.refresh(note)
+            note_id = note.id
+
+        # Wait for FTS index to catch up (should be immediate for persisted computed)
+        search_resp = self.client.get("/api/search?q=quantum")
+        self.assertEqual(search_resp.status_code, 200)
+        payload = search_resp.json()
+        self.assertEqual(payload["count"], 2)
+        results = payload["results"]
+        self.assertEqual(len(results), 2)
+        sources = {r["source_type"] for r in results}
+        self.assertEqual(sources, {"highlight", "note"})
+        doc_titles = {r["document_title"] for r in results}
+        self.assertEqual(doc_titles, {"Search Test PDF"})
+        page_numbers = {r["page_number"] for r in results}
+        self.assertEqual(page_numbers, {3})
+        highlight_ids = {r["highlight_id"] for r in results if r["highlight_id"]}
+        self.assertEqual(highlight_ids, {str(highlight_id)})
+
+        # Verify ranking: exact matches in both sources
+        ranks = [r["rank"] for r in results]
+        self.assertTrue(all(r > 0 for r in ranks))
+
+        # Empty query returns empty results
+        empty_resp = self.client.get("/api/search?q=")
+        self.assertEqual(empty_resp.status_code, 200)
+        self.assertEqual(empty_resp.json()["count"], 0)
+
+        # No-match query returns empty results
+        no_match = self.client.get("/api/search?q=xyznotfound")
+        self.assertEqual(no_match.status_code, 200)
+        self.assertEqual(no_match.json()["count"], 0)
+
     def test_stream_document_pdf_returns_pdf_bytes(self) -> None:
         pdf_bytes = self._build_pdf_bytes(
             title="Streaming PDF",

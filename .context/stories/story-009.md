@@ -1,9 +1,9 @@
 # Story 009: Reader / Notes visual polish
 
-**Status:** in-progress  
+**Status:** complete  
 **Created:** 2026-04-27  
-**Last accessed:** 2026-04-27  
-**Completed:** —
+**Last accessed:** 2026-05-02  
+**Completed:** 2026-05-02
 
 ---
 

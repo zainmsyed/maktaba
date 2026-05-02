@@ -26,6 +26,82 @@
   let sortMode: 'last_opened' | 'date_added' | 'title' = 'date_added';
   let pollTimer: number | null = null;
 
+  // Search state
+  let searchQuery = '';
+  let searchResults: Array<{
+    id: string;
+    source_type: 'highlight' | 'note';
+    document_id: string;
+    document_title: string | null;
+    page_number: number | null;
+    content: string;
+    highlight_id: string | null;
+  }> = [];
+  let searchOpen = false;
+  let searchLoading = false;
+  let searchError: string | null = null;
+  let searchTimer: number | null = null;
+
+  function clearSearch() {
+    searchQuery = '';
+    searchResults = [];
+    searchOpen = false;
+    searchError = null;
+    if (searchTimer !== null) {
+      clearTimeout(searchTimer);
+      searchTimer = null;
+    }
+  }
+
+  async function runSearch() {
+    const q = searchQuery.trim();
+    if (!q) {
+      searchResults = [];
+      searchOpen = false;
+      return;
+    }
+    searchLoading = true;
+    searchError = null;
+    try {
+      const resp = await fetch(`${apiUrl}/api/search?q=${encodeURIComponent(q)}&limit=20`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const payload = await resp.json();
+      searchResults = payload.results || [];
+      searchOpen = true;
+    } catch (e) {
+      searchError = e instanceof Error ? e.message : String(e);
+      searchResults = [];
+    } finally {
+      searchLoading = false;
+    }
+  }
+
+  function debouncedSearch() {
+    if (searchTimer !== null) clearTimeout(searchTimer);
+    if (!searchQuery.trim()) {
+      searchResults = [];
+      searchOpen = false;
+      return;
+    }
+    searchTimer = setTimeout(() => {
+      searchTimer = null;
+      void runSearch();
+    }, 250) as unknown as number;
+  }
+
+  function handleResultClick(result: typeof searchResults[0]) {
+    clearSearch();
+    if (!result.document_id) return;
+    // Navigate to reader; the reader will restore last page or jump via highlight.
+    const url = new URL(`/library/${result.document_id}`, window.location.href);
+    if (result.highlight_id) {
+      url.searchParams.set('highlight', result.highlight_id);
+    } else if (result.page_number) {
+      url.searchParams.set('page', String(result.page_number));
+    }
+    void goto(url.pathname + url.search);
+  }
+
   function goToLastReading() {
     try {
       const id = localStorage.getItem('maktaba:lastDocumentId');
@@ -284,6 +360,49 @@
         </nav>
       </div>
 
+      <div class="search-wrap">
+        <div class="search-box" class:search-box--active={searchOpen || searchQuery.length > 0}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Search notes and highlights…"
+            aria-label="Search notes and highlights"
+            bind:value={searchQuery}
+            on:input={debouncedSearch}
+            on:keydown={(e) => { if (e.key === 'Escape') clearSearch(); }}
+          />
+          {#if searchLoading}
+            <span class="search-spinner" aria-hidden="true">⟳</span>
+          {/if}
+        </div>
+        {#if searchOpen}
+          <div class="search-panel" role="listbox" aria-label="Search results">
+            {#if searchError}
+              <div class="search-error">{searchError}</div>
+            {:else if searchResults.length === 0}
+              <div class="search-empty">No results for “{searchQuery}”</div>
+            {:else}
+              {#each searchResults as result (result.id)}
+                <button
+                  type="button"
+                  class="search-result"
+                  role="option"
+                  on:click={() => handleResultClick(result)}
+                >
+                  <span class="search-result-type">{result.source_type}</span>
+                  <span class="search-result-title">{result.document_title ?? 'Untitled'}</span>
+                  {#if result.page_number}
+                    <span class="search-result-page">p. {result.page_number}</span>
+                  {/if}
+                  <p class="search-result-snippet">{result.content}</p>
+                </button>
+              {/each}
+            {/if}
+          </div>
+        {/if}
+      </div>
+
       <div class="topbar-right">
         <label class="upload-btn">
           <input type="file" accept=".pdf,.epub" class="sr-only" on:change={onFileChange} />
@@ -494,6 +613,142 @@
     font-weight: 300;
     font-family: var(--font-serif);
     outline: none;
+  }
+
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    max-width: 420px;
+    min-width: 0;
+  }
+
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(26, 24, 20, 0.12);
+    background: rgba(250, 248, 244, 0.95);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .search-box--active {
+    border-color: rgba(26, 24, 20, 0.22);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+
+  .search-icon {
+    color: #8a8680;
+    flex-shrink: 0;
+  }
+
+  .search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    font-weight: 300;
+    color: #1a1814;
+    outline: none;
+    min-width: 0;
+  }
+  .search-input::placeholder {
+    color: #8a8680;
+  }
+
+  .search-spinner {
+    font-size: 14px;
+    color: #8a8680;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .search-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: rgba(250, 248, 244, 0.99);
+    border: 0.5px solid rgba(26, 24, 20, 0.14);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.08);
+    max-height: 380px;
+    overflow-y: auto;
+    padding: 6px 0;
+  }
+
+  .search-empty,
+  .search-error {
+    padding: 14px 16px;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    color: #8a8680;
+    text-align: center;
+  }
+  .search-error {
+    color: #be123c;
+  }
+
+  .search-result {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 6px 10px;
+    align-items: center;
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .search-result:hover {
+    background: rgba(242, 240, 235, 0.9);
+  }
+
+  .search-result-type {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #8a8680;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(232, 229, 222, 0.7);
+  }
+
+  .search-result-title {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    font-weight: 500;
+    color: #1a1814;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .search-result-page {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #8a8680;
+    white-space: nowrap;
+  }
+
+  .search-result-snippet {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 12px;
+    font-weight: 300;
+    color: #5b544a;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .library-view {

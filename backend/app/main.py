@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
-from sqlalchemy import delete as sa_delete, func, select
+from sqlalchemy import delete as sa_delete, func, select, text
 from pydantic import BaseModel
 
 from app.db import get_session, initialize_database
@@ -235,6 +235,17 @@ class NoteUpdate(BaseModel):
     content: str
 
 
+class SearchResult(BaseModel):
+    id: str
+    source_type: str
+    document_id: str
+    document_title: str | None
+    page_number: int | None
+    content: str
+    highlight_id: str | None
+    rank: float
+
+
 def serialize_highlight(highlight: Highlight) -> dict[str, object]:
     payload = highlight.model_dump(mode="json")
     payload.pop("fts", None)
@@ -445,6 +456,73 @@ def delete_note(
     session.delete(note)
     session.commit()
     return {"deleted": True}
+
+
+@app.get("/api/search")
+def search(
+    q: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    if not q or not q.strip():
+        return {"results": [], "query": q}
+
+    ts_query = func.plainto_tsquery("english", q.strip())
+
+    highlight_stmt = (
+        select(
+            Highlight.id,
+            text("'highlight'").label("source_type"),
+            Highlight.document_id,
+            Document.title.label("document_title"),
+            Highlight.page_number,
+            Highlight.extracted_text.label("content"),
+            func.cast(None, func.typeof(Highlight.id)).label("highlight_id"),
+            func.ts_rank_cd(Highlight.fts, ts_query).label("rank"),
+        )
+        .join(Document, Highlight.document_id == Document.id)
+        .where(
+            Highlight.fts.op("@@")(ts_query),
+            Document.deleted_at.is_(None),
+        )
+    )
+
+    note_stmt = (
+        select(
+            Note.id,
+            text("'note'").label("source_type"),
+            Note.document_id,
+            Document.title.label("document_title"),
+            Highlight.page_number,
+            Note.content,
+            Note.highlight_id,
+            func.ts_rank_cd(Note.fts, ts_query).label("rank"),
+        )
+        .join(Document, Note.document_id == Document.id)
+        .outerjoin(Highlight, Note.highlight_id == Highlight.id)
+        .where(
+            Note.fts.op("@@")(ts_query),
+            Document.deleted_at.is_(None),
+        )
+    )
+
+    union_stmt = highlight_stmt.union_all(note_stmt).order_by(text("rank DESC")).limit(limit)
+    rows = session.exec(union_stmt).all()
+
+    results = []
+    for row in rows:
+        results.append({
+            "id": str(row.id),
+            "source_type": row.source_type,
+            "document_id": str(row.document_id),
+            "document_title": row.document_title,
+            "page_number": row.page_number,
+            "content": row.content,
+            "highlight_id": str(row.highlight_id) if row.highlight_id else None,
+            "rank": float(row.rank) if row.rank is not None else 0.0,
+        })
+
+    return {"results": results, "query": q.strip(), "count": len(results)}
 
 
 @app.delete("/api/highlights/{highlight_id}")

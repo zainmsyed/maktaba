@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { beforeNavigate } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { onMount, tick } from 'svelte';
   import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
   import {
@@ -813,6 +814,42 @@
     }
   }
 
+  // Jump to a highlight or page from URL query params after content loads.
+  async function jumpFromQueryParams() {
+    if (!browser) return;
+    const params = new URLSearchParams(window.location.search);
+    const highlightId = params.get('highlight');
+    const pageParam = params.get('page');
+
+    if (highlightId) {
+      const highlight = getHighlightById(highlightId);
+      if (highlight) {
+        await tick();
+        const didScroll = scrollHighlightIntoView(highlight);
+        if (!didScroll) scrollToPage(highlight.page_number);
+        window.setTimeout(() => {
+          void focusHighlightById(highlightId, { openPopup: true, scrollIntoView: false });
+        }, 280);
+      }
+    } else if (pageParam) {
+      const pageNumber = Number(pageParam);
+      if (!Number.isNaN(pageNumber) && pageNumber > 0) {
+        await tick();
+        scrollToPage(pageNumber);
+      }
+    }
+
+    // Clean query params from URL so refresh doesn't re-jump
+    if (highlightId || pageParam) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('highlight');
+        url.searchParams.delete('page');
+        window.history.replaceState({}, '', url.toString());
+      } catch {}
+    }
+  }
+
   async function persistLibraryHighlight(highlight: LibraryHighlight) {
     const highlightId = highlight.id ?? '';
     const payload = buildCreatePayload(highlight);
@@ -1132,8 +1169,11 @@
     }
     subscribeToHighlightsStore();
     syncHighlightsStore();
-    void loadHighlights();
-    void loadNotes();
+    void loadHighlights().then(() => {
+      void loadNotes().then(() => {
+        void jumpFromQueryParams();
+      });
+    });
     setHighlightMode('text');
 
     const handleBeforeUnload = () => saveProgress();
