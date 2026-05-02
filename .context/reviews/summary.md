@@ -1,6 +1,6 @@
 # Review Summary
 
-**Last updated:** 2026-05-02T21:11:48Z
+**Last updated:** 2026-05-02T21:57:49Z
 
 ## Findings
 - When adding schema/bootstrap logic, include at least one automated Postgres smoke test for tables, extensions, and indexes. | count: 2 | status: promoted | sources: review-20260424-204758.md, review-20260424-205443.md
@@ -16,6 +16,8 @@
 - Ensure public API endpoints that exercise media processing (PDF text extraction, OCR) have integration tests covering success and common failure modes. | count: 1 | status: tracked | sources: review-20260429-022103.md | stories: story-008
 - Extract reactive `$:` assignment bodies longer than ~10 lines into named functions to keep complexity scores down. | count: 1 | status: tracked | sources: review-20260502-202742.md | stories: story-009
 - Fail closed on upload validation; parser failures should reject the file instead of silently downgrading to filename fallback. | count: 1 | status: tracked | sources: review-20260425-011052.md | stories: story-003
+- For autosave flows, separate network persistence from active-editor state synchronization so race-condition fixes remain testable. | count: 1 | status: tracked | sources: review-20260502-214922.md | stories: story-010
+- For reader scroll tracking, keep page scoring pure and separate from state mutation/status messaging to reduce layout-jump regressions. | count: 1 | status: tracked | sources: review-20260502-214922.md | stories: story-010
 - If a background job writes child rows, rollback staged inserts before recording failure so partial output never commits. | count: 1 | status: tracked | sources: review-20260425-191437.md | stories: story-006
 - Never delete a canonical storage path during rollback unless the current transaction created that file. | count: 1 | status: tracked | sources: review-20260425-011052.md | stories: story-003
 - New background extraction/OCR flows should have automated coverage for both the happy path and failure rollback. | count: 1 | status: tracked | sources: review-20260425-191437.md | stories: story-006
@@ -38,9 +40,11 @@
 - When extracting a UI component, remove the parent's legacy handlers and element refs that were used only by the inline implementation. | count: 1 | status: tracked | sources: review-20260428-210149.md | stories: story-008
 - When fixing a calculation bug, add a regression test that would have caught it. | count: 1 | status: tracked | sources: review-20260502-202742.md | stories: story-009
 - When generating lockfiles for containerized builds, generate the lock with the same Python minor version used in the containers (e.g., `uv lock --python X.Y`). | count: 1 | status: tracked | sources: review-20260424-171509.md
+- When implementing cross-route jump behavior, add a regression test that covers both the source route URL construction and the destination route's restore-vs-jump precedence. | count: 1 | status: tracked | sources: review-20260502-214922.md | stories: story-010
 - When ownership semantics exist (parent → child rows), declare the FK delete action at the schema level (ondelete) rather than relying only on application cleanup. | count: 1 | status: tracked | sources: review-20260424-205443.md
 - When progress logic is duplicated across views, extract a single tested helper to prevent drift. | count: 1 | status: tracked | sources: review-20260502-202742.md | stories: story-009
 - When replacing or wrapping a third-party component's UI hooks, update the test mocks to mirror the new prop/behavior and add a small E2E smoke test for the integration. | count: 1 | status: tracked | sources: review-20260427-200715.md | stories: story-008
 - When syncing Python dependencies in a slim Docker image, ensure required OS-level build dependencies are installed or use a base image that provides them. | count: 1 | status: tracked | sources: review-20260424-171509.md
 - When the data model depends on delete cascades, declare the delete policy in the foreign key definition rather than relying on application-side cleanup. | count: 1 | status: tracked | sources: review-20260424-204758.md
 - When the same editor state can render in multiple placements, either scope the state per placement or explicitly close the previous placement before opening the next one. | count: 1 | status: tracked | sources: review-20260427-201845.md
+- When viewer locator/focus code has multiple fallbacks, isolate lookup, scroll, visual focus, and popup side effects into separate helpers so future locator fixes do not regress unrelated behavior. | count: 1 | status: tracked | sources: review-20260502-214922.md | stories: story-010

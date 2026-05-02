@@ -23,7 +23,9 @@
   let sortedDocuments: DocWithJobs[] = [];
   let loading = true;
   let error: string | null = null;
-  let sortMode: 'last_opened' | 'date_added' | 'title' = 'date_added';
+  type SortMode = 'last_opened' | 'date_added' | 'title';
+
+  let sortMode: SortMode = 'date_added';
   let pollTimer: number | null = null;
 
   // Search state
@@ -231,26 +233,31 @@
     }
   }
 
-  function sortDocuments(a: DocWithJobs, b: DocWithJobs, mode: typeof sortMode): number {
-    const ad = a.document || {};
-    const bd = b.document || {};
-    if (mode === 'title') {
-      const at = (ad.title ?? '').toLowerCase();
-      const bt = (bd.title ?? '').toLowerCase();
-      return at.localeCompare(bt);
-    }
-    if (mode === 'date_added') {
-      const adt = Date.parse(ad.created_at ?? ad.createdAt ?? '') || 0;
-      const bdt = Date.parse(bd.created_at ?? bd.createdAt ?? '') || 0;
-      return bdt - adt;
-    }
-    const a_last = ad.reading_progress?.last_opened
-      ? Date.parse(ad.reading_progress.last_opened)
-      : Date.parse(ad.updated_at ?? ad.updatedAt ?? '') || 0;
-    const b_last = bd.reading_progress?.last_opened
-      ? Date.parse(bd.reading_progress.last_opened)
-      : Date.parse(bd.updated_at ?? bd.updatedAt ?? '') || 0;
-    return b_last - a_last;
+  function documentTitleKey(entry: DocWithJobs): string {
+    return (entry.document?.title ?? '').toLowerCase();
+  }
+
+  function documentCreatedTimestamp(entry: DocWithJobs): number {
+    const doc = entry.document || {};
+    return Date.parse(doc.created_at ?? doc.createdAt ?? '') || 0;
+  }
+
+  function documentLastActivityTimestamp(entry: DocWithJobs): number {
+    const doc = entry.document || {};
+    const lastOpened = doc.reading_progress?.last_opened;
+    return lastOpened
+      ? Date.parse(lastOpened) || 0
+      : Date.parse(doc.updated_at ?? doc.updatedAt ?? '') || 0;
+  }
+
+  const documentSortComparators: Record<SortMode, (a: DocWithJobs, b: DocWithJobs) => number> = {
+    title: (a, b) => documentTitleKey(a).localeCompare(documentTitleKey(b)),
+    date_added: (a, b) => documentCreatedTimestamp(b) - documentCreatedTimestamp(a),
+    last_opened: (a, b) => documentLastActivityTimestamp(b) - documentLastActivityTimestamp(a),
+  };
+
+  function sortDocuments(a: DocWithJobs, b: DocWithJobs, mode: SortMode): number {
+    return documentSortComparators[mode](a, b);
   }
 
   // derive a sorted array reactively so Svelte change detection is reliable
@@ -389,6 +396,7 @@
                   type="button"
                   class="search-result"
                   role="option"
+                  aria-selected="false"
                   on:click={() => handleResultClick(result)}
                 >
                   <span class="search-result-type">{result.source_type}</span>

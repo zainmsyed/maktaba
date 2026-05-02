@@ -1,9 +1,9 @@
 # Story 010: Add full-text search across notes and highlights
 
-**Status:** in-progress  
+**Status:** complete  
 **Created:** 2026-04-24  
 **Last accessed:** 2026-05-02  
-**Completed:** —
+**Completed:** 2026-05-02
 
 ---
 

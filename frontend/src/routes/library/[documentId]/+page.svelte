@@ -345,16 +345,20 @@
     return note.page_number ?? note.highlight?.page_number ?? null;
   }
 
+  function getNoteSortPage(note: BackendNote): number {
+    return getNotePageNumber(note) ?? Number.POSITIVE_INFINITY;
+  }
+
+  function getNoteSortTimestamp(note: BackendNote): number {
+    return Date.parse(note.updated_at || note.created_at || '') || 0;
+  }
+
   function compareNotes(a: BackendNote, b: BackendNote): number {
-    const pageA = getNotePageNumber(a) ?? Number.POSITIVE_INFINITY;
-    const pageB = getNotePageNumber(b) ?? Number.POSITIVE_INFINITY;
-    if (pageA !== pageB) return pageA - pageB;
-
-    const updatedA = Date.parse(a.updated_at || a.created_at || '') || 0;
-    const updatedB = Date.parse(b.updated_at || b.created_at || '') || 0;
-    if (updatedA !== updatedB) return updatedB - updatedA;
-
-    return a.id.localeCompare(b.id);
+    return (
+      getNoteSortPage(a) - getNoteSortPage(b) ||
+      getNoteSortTimestamp(b) - getNoteSortTimestamp(a) ||
+      a.id.localeCompare(b.id)
+    );
   }
 
   function sortNotes(records: BackendNote[] = []) {
@@ -507,48 +511,57 @@
     }
   }
 
+  function shouldSkipBlankNewNote(note: BackendNote | null, draft: string): boolean {
+    return note === null && draft.trim().length === 0;
+  }
+
+  async function saveNoteDraft(target: NoteEditorTarget, note: BackendNote | null, draft: string) {
+    if (note) {
+      return await noteClient.updateNote(note.id, { content: draft });
+    }
+
+    return await noteClient.createNote({
+      content: draft,
+      highlight_id: target.kind === 'highlight' ? target.highlight.id : null,
+    });
+  }
+
+  function syncSavedNoteToActiveEditor(savedNote: BackendNote, target: NoteEditorTarget, revision: number) {
+    if (revision !== noteEditorRevision) return;
+    activeNoteRecord = savedNote;
+    noteDraft = savedNote.content;
+    noteSavedDraft = savedNote.content;
+    setNoteStatus('saved', 'Saved');
+    scheduleSavedNoteFade(revision, target);
+  }
+
+  function handleNoteSaveFailure(error: unknown, revision: number) {
+    console.error('[note] Failed to save note', error);
+    if (revision === noteEditorRevision) {
+      setNoteStatus('error', 'Unable to save note');
+    }
+  }
+
   async function persistNoteDraft(
     target: NoteEditorTarget,
     note: BackendNote | null,
     draft: string,
     revision: number,
   ) {
-    const isBlankNewNote = note === null && draft.trim().length === 0;
-    if (isBlankNewNote) {
-      if (revision === noteEditorRevision) {
-        resetNoteStatus(target);
-      }
+    if (shouldSkipBlankNewNote(note, draft)) {
+      if (revision === noteEditorRevision) resetNoteStatus(target);
       return null;
     }
 
-    if (revision === noteEditorRevision) {
-      setNoteStatus('saving', 'Saving…');
-    }
+    if (revision === noteEditorRevision) setNoteStatus('saving', 'Saving…');
 
     try {
-      const savedNote = note
-        ? await noteClient.updateNote(note.id, { content: draft })
-        : await noteClient.createNote({
-            content: draft,
-            highlight_id: target.kind === 'highlight' ? target.highlight.id : null,
-          });
-
+      const savedNote = await saveNoteDraft(target, note, draft);
       upsertNote(savedNote);
-
-      if (revision === noteEditorRevision) {
-        activeNoteRecord = savedNote;
-        noteDraft = savedNote.content;
-        noteSavedDraft = savedNote.content;
-        setNoteStatus('saved', 'Saved');
-        scheduleSavedNoteFade(revision, target);
-      }
-
+      syncSavedNoteToActiveEditor(savedNote, target, revision);
       return savedNote;
     } catch (e) {
-      console.error('[note] Failed to save note', e);
-      if (revision === noteEditorRevision) {
-        setNoteStatus('error', 'Unable to save note');
-      }
+      handleNoteSaveFailure(e, revision);
       return null;
     }
   }
@@ -661,16 +674,18 @@
   function scrollHighlightIntoView(highlight: BackendHighlight) {
     currentPage = Math.min(Math.max(highlight.page_number, 1), totalPages || highlight.page_number);
 
-    try {
-      pdfHighlighterUtils.scrollToHighlight?.(backendToLibraryHighlight(highlight));
-      window.setTimeout(updateCurrentPageFromScroll, 120);
-      window.setTimeout(updateCurrentPageFromScroll, 520);
-      if (totalPages > 0) {
-        statusMessage = `Showing page ${currentPage} of ${totalPages}`;
+    if (pdfHighlighterUtils.scrollToHighlight) {
+      try {
+        pdfHighlighterUtils.scrollToHighlight(backendToLibraryHighlight(highlight));
+        window.setTimeout(updateCurrentPageFromScroll, 120);
+        window.setTimeout(updateCurrentPageFromScroll, 520);
+        if (totalPages > 0) {
+          statusMessage = `Showing page ${currentPage} of ${totalPages}`;
+        }
+        return true;
+      } catch (e) {
+        console.warn('[highlight] pdfHighlighterUtils.scrollToHighlight failed', e);
       }
-      return true;
-    } catch (e) {
-      console.warn('[highlight] pdfHighlighterUtils.scrollToHighlight failed', e);
     }
 
     ensurePdfScroller();
@@ -683,81 +698,77 @@
     return true;
   }
 
-  async function focusHighlightById(highlightId: string, options: { openPopup?: boolean; scrollIntoView?: boolean } = {}) {
-    await tick();
+  function findHighlightElement(highlightId: string): HTMLElement | null {
+    return (
+      (pdfViewerHostEl?.querySelector(`[data-testid="mock-highlight-${highlightId}"]`) as HTMLElement | null) ||
+      (pdfViewerHostEl?.querySelector(`[data-highlight-id="${highlightId}"]`) as HTMLElement | null) ||
+      (document.getElementById(String(highlightId)) as HTMLElement | null) ||
+      findHighlightElementByIdAttribute(highlightId)
+    );
+  }
 
-    let el: HTMLElement | null = null;
-
-    // Prefer test selector (used in tests/mocks)
-    el = pdfViewerHostEl?.querySelector(`[data-testid="mock-highlight-${highlightId}"]`) as HTMLElement | null;
-
-    // Then try a data attribute selector (used by some viewers)
-    if (!el) {
-      el = pdfViewerHostEl?.querySelector(`[data-highlight-id="${highlightId}"]`) as HTMLElement | null;
+  function findHighlightElementByIdAttribute(highlightId: string): HTMLElement | null {
+    try {
+      const escaped = String(highlightId).replace(/"/g, '\\"');
+      return pdfViewerHostEl?.querySelector(`[id="${escaped}"]`) as HTMLElement | null;
+    } catch {
+      return null;
     }
+  }
 
-    // Fallback to getElementById (safer than `#id` in querySelector since ids may contain characters that need escaping)
-    if (!el) {
-      el = document.getElementById(String(highlightId)) as HTMLElement | null;
-    }
+  function scrollHighlightElementIntoView(el: HTMLElement, enabled: boolean) {
+    if (!enabled) return;
+    try {
+      el.scrollIntoView?.({ block: 'center', behavior: 'smooth' } as any);
+    } catch {}
+  }
 
-    // Final fallback: attribute selector for id (escape quotes if any)
-    if (!el) {
-      try {
-        const escaped = String(highlightId).replace(/"/g, '\\"');
-        el = pdfViewerHostEl?.querySelector(`[id="${escaped}"]`) as HTMLElement | null;
-      } catch (e) {
-        // ignore selector construction errors
-        el = null;
-      }
-    }
-
-    if (!el) return false;
-
-    if (options.scrollIntoView !== false) {
-      try {
-        el.scrollIntoView?.({ block: 'center', behavior: 'smooth' } as any);
-      } catch (e) {
-        // ignore
-      }
-    }
-
+  function decorateFocusedHighlight(el: HTMLElement) {
     const previousOutline = el.style.outline;
     const previousOutlineOffset = el.style.outlineOffset;
     const previousTabIndex = el.getAttribute('tabindex');
-    if (previousTabIndex === null) {
-      el.setAttribute('tabindex', '-1');
-    }
+    if (previousTabIndex === null) el.setAttribute('tabindex', '-1');
+
     try {
       el.focus?.({ preventScroll: true } as any);
-    } catch (e) {
-      // ignore
-    }
+    } catch {}
+
     el.style.outline = '2px solid rgb(34 211 238 / 0.9)';
     el.style.outlineOffset = '2px';
-    window.setTimeout(() => {
-      el.style.outline = previousOutline;
-      el.style.outlineOffset = previousOutlineOffset;
-      if (previousTabIndex === null) {
-        el.removeAttribute('tabindex');
-      }
-    }, 1200);
+    window.setTimeout(() => restoreHighlightDecoration(el, previousOutline, previousOutlineOffset, previousTabIndex), 1200);
+  }
 
-    // Try to trigger the viewer's highlight activation (many viewers respond to click)
+  function restoreHighlightDecoration(
+    el: HTMLElement,
+    previousOutline: string,
+    previousOutlineOffset: string,
+    previousTabIndex: string | null,
+  ) {
+    el.style.outline = previousOutline;
+    el.style.outlineOffset = previousOutlineOffset;
+    if (previousTabIndex === null) el.removeAttribute('tabindex');
+  }
+
+  function activateHighlightElement(el: HTMLElement) {
     try {
       el.click?.();
-    } catch (e) {
-      // ignore
-    }
+    } catch {}
+  }
 
-    if (options.openPopup) {
-      try {
-        setTimeout(() => void openHighlightNoteEditor(highlightId, undefined, 'popup'), 0);
-      } catch (e) {
-        // ignore
-      }
-    }
+  function openHighlightPopupAfterFocus(highlightId: string, enabled: boolean | undefined) {
+    if (!enabled) return;
+    setTimeout(() => void openHighlightNoteEditor(highlightId, undefined, 'popup'), 0);
+  }
 
+  async function focusHighlightById(highlightId: string, options: { openPopup?: boolean; scrollIntoView?: boolean } = {}) {
+    await tick();
+    const el = findHighlightElement(highlightId);
+    if (!el) return false;
+
+    scrollHighlightElementIntoView(el, options.scrollIntoView !== false);
+    decorateFocusedHighlight(el);
+    activateHighlightElement(el);
+    openHighlightPopupAfterFocus(highlightId, options.openPopup);
     return true;
   }
 
@@ -823,30 +834,39 @@
     rebuildingHighlightsStore = false;
   }
 
+  function persistPendingStoreHighlights(storeHighlights: LibraryHighlight[]) {
+    for (const highlight of storeHighlights) {
+      if (highlight.serverPersisted) continue;
+      const highlightId = highlight.id ?? '';
+      if (!highlightId || pendingHighlightIds.has(highlightId)) continue;
+      void persistLibraryHighlight(highlight);
+    }
+  }
+
+  function getHighlightStoreIds(storeHighlights: LibraryHighlight[]) {
+    return new Set(
+      storeHighlights
+        .map((highlight) => highlight.id)
+        .filter((highlightId): highlightId is string => typeof highlightId === 'string' && highlightId.length > 0),
+    );
+  }
+
+  function deleteMissingPersistedHighlights(storeIds: Set<string>) {
+    for (const persistedHighlight of highlights) {
+      if (storeIds.has(persistedHighlight.id) || pendingDeleteIds.has(persistedHighlight.id)) continue;
+      void deleteHighlightById(persistedHighlight.id, { suppressAlert: true });
+    }
+  }
+
+  function handleHighlightsStoreUpdate(storeHighlights: LibraryHighlight[]) {
+    if (rebuildingHighlightsStore) return;
+    persistPendingStoreHighlights(storeHighlights);
+    deleteMissingPersistedHighlights(getHighlightStoreIds(storeHighlights));
+  }
+
   function subscribeToHighlightsStore() {
     unsubscribeHighlightsStore?.();
-    unsubscribeHighlightsStore = highlightsStore.subscribe((storeHighlights) => {
-      if (rebuildingHighlightsStore) return;
-
-      for (const highlight of storeHighlights) {
-        if (highlight.serverPersisted) continue;
-        const highlightId = highlight.id ?? '';
-        if (!highlightId || pendingHighlightIds.has(highlightId)) continue;
-        void persistLibraryHighlight(highlight);
-      }
-
-      const storeIds = new Set(
-        storeHighlights
-          .map((highlight) => highlight.id)
-          .filter((highlightId): highlightId is string => typeof highlightId === 'string' && highlightId.length > 0),
-      );
-
-      for (const persistedHighlight of highlights) {
-        if (!storeIds.has(persistedHighlight.id) && !pendingDeleteIds.has(persistedHighlight.id)) {
-          void deleteHighlightById(persistedHighlight.id, { suppressAlert: true });
-        }
-      }
-    });
+    unsubscribeHighlightsStore = highlightsStore.subscribe(handleHighlightsStoreUpdate);
   }
 
   async function loadHighlights() {
@@ -1022,34 +1042,40 @@
     pdfScrollerEl = null;
   }
 
-  function updateCurrentPageFromScroll() {
-    if (!pdfScrollerEl) return;
+  function getViewerPages(): HTMLElement[] {
+    return pdfScrollerEl ? Array.from(pdfScrollerEl.querySelectorAll<HTMLElement>('.page[data-page-number]')) : [];
+  }
 
-    const pages = Array.from(pdfScrollerEl.querySelectorAll<HTMLElement>('.page[data-page-number]'));
-    if (pages.length === 0) return;
+  function getScrollAnchor(containerRect: DOMRect) {
+    return containerRect.top + Math.min(140, Math.max(72, containerRect.height * 0.22));
+  }
 
-    const containerRect = pdfScrollerEl.getBoundingClientRect();
-    const anchor = containerRect.top + Math.min(140, Math.max(72, containerRect.height * 0.22));
-    let bestPage = currentPage;
+  function getPageNumberFromElement(page: HTMLElement): number | null {
+    const pageNumber = Number(page.dataset.pageNumber || '0');
+    return pageNumber > 0 ? pageNumber : null;
+  }
+
+  function getPageVisibleArea(rect: DOMRect, containerRect: DOMRect) {
+    const visibleTop = Math.max(rect.top, containerRect.top);
+    const visibleBottom = Math.min(rect.bottom, containerRect.bottom);
+    return Math.max(0, visibleBottom - visibleTop);
+  }
+
+  function chooseScrolledPage(pages: HTMLElement[], containerRect: DOMRect, fallbackPage: number) {
+    const anchor = getScrollAnchor(containerRect);
+    let bestPage = fallbackPage;
     let bestVisibleArea = -1;
     let bestScore = Number.POSITIVE_INFINITY;
 
     for (const page of pages) {
-      const pageNumber = Number(page.dataset.pageNumber || '0');
+      const pageNumber = getPageNumberFromElement(page);
       if (!pageNumber) continue;
+
       const rect = page.getBoundingClientRect();
+      if (rect.top <= anchor && rect.bottom >= anchor) return pageNumber;
 
-      if (rect.top <= anchor && rect.bottom >= anchor) {
-        bestPage = pageNumber;
-        bestVisibleArea = Number.POSITIVE_INFINITY;
-        break;
-      }
-
-      const visibleTop = Math.max(rect.top, containerRect.top);
-      const visibleBottom = Math.min(rect.bottom, containerRect.bottom);
-      const visibleArea = Math.max(0, visibleBottom - visibleTop);
+      const visibleArea = getPageVisibleArea(rect, containerRect);
       const score = Math.abs(rect.top - anchor);
-
       if (visibleArea > bestVisibleArea || (visibleArea === bestVisibleArea && score < bestScore)) {
         bestVisibleArea = visibleArea;
         bestScore = score;
@@ -1057,13 +1083,22 @@
       }
     }
 
-    if (bestPage !== currentPage) {
-      currentPage = bestPage;
-    }
+    return bestPage;
+  }
 
+  function setCurrentPageFromScroll(nextPage: number) {
+    if (nextPage !== currentPage) currentPage = nextPage;
     if (totalPages > 0) {
       statusMessage = `Showing page ${currentPage} of ${totalPages}`;
     }
+  }
+
+  function updateCurrentPageFromScroll() {
+    if (!pdfScrollerEl) return;
+    const pages = getViewerPages();
+    if (pages.length === 0) return;
+    const nextPage = chooseScrolledPage(pages, pdfScrollerEl.getBoundingClientRect(), currentPage);
+    setCurrentPageFromScroll(nextPage);
   }
 
   function handlePdfScroll() {

@@ -69,6 +69,8 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+  window.history.pushState({}, '', '/library/doc-1');
   vi.stubGlobal('alert', vi.fn());
 
   const highlightRecords = new Map<string, any>();
@@ -445,6 +447,69 @@ describe('reader page', () => {
       content: 'Standalone reflection',
       highlight_id: null,
     });
+  });
+
+  it('applies query highlight jumps instead of restoring saved reading progress', async () => {
+    vi.useFakeTimers();
+    window.history.pushState({}, '', '/library/doc-1?highlight=highlight-1');
+    localStorage.setItem('maktaba:progress:doc-1', JSON.stringify({ lastPage: 3, maxPage: 3, total: 3 }));
+
+    const fetchWithHighlight = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (method === 'GET' && /\/api\/documents\/[^/]+\/highlights$/.test(url)) {
+        return jsonResponse({
+          highlights: [
+            {
+              id: 'highlight-1',
+              page_number: 2,
+              x: 10,
+              y: 10,
+              width: 20,
+              height: 10,
+              extracted_text: 'query jump highlight',
+              highlight_type: 'text',
+              rects: [],
+              color: 'yellow',
+              format: 'pdf',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ],
+        });
+      }
+      if (method === 'GET' && /\/api\/documents\/[^/]+\/notes$/.test(url)) {
+        return jsonResponse({ notes: [] });
+      }
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchWithHighlight);
+
+    const { getAllByText } = render(ReaderPage, {
+      props: {
+        data: {
+          apiUrl: 'http://api.test',
+          fileUrl: 'http://api.test/api/documents/doc-1/file',
+          document: {
+            id: 'doc-1',
+            title: 'Query Jump Test',
+            authors: ['Ada Lovelace'],
+            format: 'pdf',
+            page_count: 3,
+          },
+          jobs: [],
+        },
+      },
+    });
+
+    await advanceAndFlush(0);
+    await advanceAndFlush(32);
+
+    await waitFor(() => {
+      expect(getAllByText('2 / 3').length).toBeGreaterThan(0);
+    });
+
+    window.history.pushState({}, '', '/library/doc-1');
   });
 
   it('filters sidebar annotations and document notes from the search box', async () => {

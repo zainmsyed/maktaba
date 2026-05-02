@@ -1,5 +1,11 @@
 import { fireEvent, render, waitFor } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const gotoMock = vi.hoisted(() => vi.fn());
+
+vi.mock('$app/navigation', () => ({
+  goto: gotoMock,
+}));
 import { advanceAndFlush } from './test-helpers';
 import LibraryPage from '../src/routes/library/+page.svelte';
 
@@ -13,6 +19,9 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe('library page', () => {
+  beforeEach(() => {
+    gotoMock.mockClear();
+  });
   it('re-sorts cards when the sort mode changes', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       jsonResponse({
@@ -68,6 +77,66 @@ describe('library page', () => {
       const titles = getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
       expect(titles).toEqual(['Alpha', 'Zulu']);
     });
+  });
+
+  it('navigates highlight search results with an explicit highlight target', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ documents: [] }))
+      .mockResolvedValue(jsonResponse({
+        results: [{
+          id: 'highlight-1',
+          source_type: 'highlight',
+          document_id: 'doc-1',
+          document_title: 'Global Search Doc',
+          page_number: 2,
+          content: 'matching highlight',
+          highlight_id: null,
+        }],
+      }));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { getByLabelText, getAllByRole } = render(LibraryPage, {
+      props: { data: { apiUrl: 'http://api.test' } },
+    });
+
+    await advanceAndFlush(0);
+    await fireEvent.input(getByLabelText('Search notes and highlights'), { target: { value: 'matching' } });
+    await advanceAndFlush(250);
+    await fireEvent.click(getAllByRole('option')[0]);
+
+    expect(gotoMock).toHaveBeenCalledWith('/library/doc-1?highlight=highlight-1');
+  });
+
+  it('navigates note search results with a page target', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ documents: [] }))
+      .mockResolvedValue(jsonResponse({
+        results: [{
+          id: 'note-1',
+          source_type: 'note',
+          document_id: 'doc-2',
+          document_title: 'Global Search Doc 2',
+          page_number: 5,
+          content: 'matching note',
+          highlight_id: null,
+        }],
+      }));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { getByLabelText, getAllByRole } = render(LibraryPage, {
+      props: { data: { apiUrl: 'http://api.test' } },
+    });
+
+    await advanceAndFlush(0);
+    await fireEvent.input(getByLabelText('Search notes and highlights'), { target: { value: 'matching' } });
+    await advanceAndFlush(250);
+    await fireEvent.click(getAllByRole('option')[0]);
+
+    expect(gotoMock).toHaveBeenCalledWith('/library/doc-2?page=5');
   });
 
   it('replaces the optimistic upload card with the server response', async () => {
