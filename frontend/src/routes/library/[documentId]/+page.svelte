@@ -41,6 +41,7 @@
   type ZoomMode = 'fit-width' | 'fit-page' | 'custom';
   type HighlightMode = 'text' | 'draw';
   type JobStatus = 'ready' | 'processing' | 'failed';
+  type SidebarMode = 'annotations' | 'document-notes';
 
   type PopupHighlightLike = {
     id?: string;
@@ -57,6 +58,11 @@
   type NoteGroup = {
     pageNumber: number;
     notes: BackendNote[];
+  };
+
+  type HighlightGroup = {
+    pageNumber: number;
+    highlights: BackendHighlight[];
   };
 
   const MIN_ZOOM = 0.5;
@@ -176,6 +182,7 @@
   let scrollFrame: number | null = null;
   let highlightsRefreshFrame: number | null = null;
   let initialZoomApplied = false;
+  let initialPageRestored = false;
 
   let highlights: BackendHighlight[] = [];
   const highlightsStore = new HighlightsModel<LibraryHighlight>([]);
@@ -193,6 +200,8 @@
     documentNotes: [],
     pageGroups: [],
   };
+  let highlightSidebarGroups: HighlightGroup[] = [];
+  let sidebarMode: SidebarMode = 'annotations';
   let activeNoteTarget: NoteEditorTarget | null = null;
   let activeNoteRecord: BackendNote | null = null;
   let noteDraft = '';
@@ -241,8 +250,8 @@
     ? data.document.authors.join(', ')
     : 'Unknown author';
   $: pageDisplay = totalPages > 0 ? `${currentPage} / ${totalPages}` : '—';
-  $: readingProgressLabel = totalPages > 0 ? `p. ${maxPageReached} of ${totalPages}` : 'p. —';
-  $: readingProgressPercent = totalPages > 0 ? Math.min(100, Math.max(1, Math.round((maxPageReached / totalPages) * 100))) : 0;
+  $: readingProgressLabel = totalPages > 0 ? `p. ${currentPage} of ${totalPages}` : 'p. —';
+  $: readingProgressPercent = totalPages > 0 ? Math.min(100, Math.max(1, Math.round((currentPage / totalPages) * 100))) : 0;
   $: readingProgressComplete = readingProgressPercent >= 100;
   $: zoomDisplay =
     zoomMode === 'fit-width'
@@ -254,8 +263,8 @@
   $: jobStatusLabel =
     jobStatus === 'processing' ? 'Processing' : jobStatus === 'failed' ? 'Failed' : 'Ready';
   $: jobCountLabel = data.jobs.length === 1 ? '1 background job' : `${data.jobs.length} background jobs`;
-  $: currentPageHighlights = highlights.filter((highlight) => highlight.page_number === currentPage);
   $: noteSidebarGroups = groupNotesForSidebar(notes);
+  $: highlightSidebarGroups = groupHighlightsForSidebar(highlights);
 
   function clampZoom(value: number) {
     return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
@@ -298,6 +307,11 @@
       return colorNameFromIndex(colorIndexFromName(highlight.color));
     }
     return colorNameFromIndex(getCurrentColorIndex());
+  }
+
+  function getHighlightColorHex(highlight: BackendHighlight | null | undefined): string {
+    const colorName = getHighlightColorName(highlight);
+    return HIGHLIGHT_COLOR_OPTIONS.find((option) => option.name === colorName)?.hex ?? HIGHLIGHT_COLOR_OPTIONS[DEFAULT_HIGHLIGHT_COLOR_INDEX].hex;
   }
 
   function deriveJobStatus(jobs: Array<{ status?: string; job_type?: string }> | undefined): JobStatus {
@@ -356,6 +370,24 @@
   function getNotesForHighlight(highlightId: string | undefined | null) {
     if (!highlightId) return [];
     return sortNotes(notes.filter((note) => note.highlight_id === highlightId));
+  }
+
+  function groupHighlightsForSidebar(records: BackendHighlight[] = []): HighlightGroup[] {
+    const pageBuckets = new Map<number, BackendHighlight[]>();
+
+    for (const highlight of records) {
+      const pageNumber = highlight.page_number;
+      const bucket = pageBuckets.get(pageNumber) ?? [];
+      bucket.push(highlight);
+      pageBuckets.set(pageNumber, bucket);
+    }
+
+    return [...pageBuckets.entries()]
+      .sort(([pageA], [pageB]) => pageA - pageB)
+      .map(([pageNumber, pageHighlights]) => ({
+        pageNumber,
+        highlights: [...pageHighlights].sort((a, b) => a.id.localeCompare(b.id)),
+      }));
   }
 
   function getPrimaryNoteForHighlight(highlightId: string | undefined | null) {
@@ -534,6 +566,9 @@
       return;
     }
     noteEditorPlacement = placement;
+    if (placement === 'sidebar') {
+      sidebarMode = 'annotations';
+    }
     if (placement === 'popup') {
       setPinned?.(true);
     }
@@ -541,6 +576,7 @@
   }
 
   async function openDocumentNoteEditor(note: BackendNote | null = null) {
+    sidebarMode = 'document-notes';
     noteEditorPlacement = 'sidebar';
     await openNoteEditor({ kind: 'document' }, note);
   }
@@ -579,6 +615,120 @@
     }, 500);
   }
 
+  function scrollHighlightIntoView(highlight: BackendHighlight) {
+    currentPage = Math.min(Math.max(highlight.page_number, 1), totalPages || highlight.page_number);
+
+    try {
+      pdfHighlighterUtils.scrollToHighlight?.(backendToLibraryHighlight(highlight));
+      window.setTimeout(updateCurrentPageFromScroll, 120);
+      window.setTimeout(updateCurrentPageFromScroll, 520);
+      if (totalPages > 0) {
+        statusMessage = `Showing page ${currentPage} of ${totalPages}`;
+      }
+      return true;
+    } catch (e) {
+      console.warn('[highlight] pdfHighlighterUtils.scrollToHighlight failed', e);
+    }
+
+    ensurePdfScroller();
+    if (!pdfScrollerEl) return false;
+    const pageEl = pdfScrollerEl.querySelector<HTMLElement>(`.page[data-page-number="${currentPage}"]`);
+    if (!pageEl) return false;
+
+    pageEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    window.setTimeout(updateCurrentPageFromScroll, 520);
+    return true;
+  }
+
+  async function focusHighlightById(highlightId: string, options: { openPopup?: boolean; scrollIntoView?: boolean } = {}) {
+    await tick();
+
+    let el: HTMLElement | null = null;
+
+    // Prefer test selector (used in tests/mocks)
+    el = pdfViewerHostEl?.querySelector(`[data-testid="mock-highlight-${highlightId}"]`) as HTMLElement | null;
+
+    // Then try a data attribute selector (used by some viewers)
+    if (!el) {
+      el = pdfViewerHostEl?.querySelector(`[data-highlight-id="${highlightId}"]`) as HTMLElement | null;
+    }
+
+    // Fallback to getElementById (safer than `#id` in querySelector since ids may contain characters that need escaping)
+    if (!el) {
+      el = document.getElementById(String(highlightId)) as HTMLElement | null;
+    }
+
+    // Final fallback: attribute selector for id (escape quotes if any)
+    if (!el) {
+      try {
+        const escaped = String(highlightId).replace(/"/g, '\\"');
+        el = pdfViewerHostEl?.querySelector(`[id="${escaped}"]`) as HTMLElement | null;
+      } catch (e) {
+        // ignore selector construction errors
+        el = null;
+      }
+    }
+
+    if (!el) return false;
+
+    if (options.scrollIntoView !== false) {
+      try {
+        el.scrollIntoView?.({ block: 'center', behavior: 'smooth' } as any);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const previousOutline = el.style.outline;
+    const previousOutlineOffset = el.style.outlineOffset;
+    const previousTabIndex = el.getAttribute('tabindex');
+    if (previousTabIndex === null) {
+      el.setAttribute('tabindex', '-1');
+    }
+    try {
+      el.focus?.({ preventScroll: true } as any);
+    } catch (e) {
+      // ignore
+    }
+    el.style.outline = '2px solid rgb(34 211 238 / 0.9)';
+    el.style.outlineOffset = '2px';
+    window.setTimeout(() => {
+      el.style.outline = previousOutline;
+      el.style.outlineOffset = previousOutlineOffset;
+      if (previousTabIndex === null) {
+        el.removeAttribute('tabindex');
+      }
+    }, 1200);
+
+    // Try to trigger the viewer's highlight activation (many viewers respond to click)
+    try {
+      el.click?.();
+    } catch (e) {
+      // ignore
+    }
+
+    if (options.openPopup) {
+      try {
+        setTimeout(() => void openHighlightNoteEditor(highlightId, undefined, 'popup'), 0);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    return true;
+  }
+
+  async function handleSidebarHighlightClick(highlight: BackendHighlight) {
+    const didScroll = scrollHighlightIntoView(highlight);
+    if (!didScroll) {
+      scrollToPage(highlight.page_number);
+    }
+    statusMessage = `Jumped to page ${highlight.page_number}`;
+    window.setTimeout(() => {
+      void focusHighlightById(highlight.id, { scrollIntoView: false });
+    }, 180);
+  }
+
   async function handleSidebarNoteClick(note: BackendNote) {
     const pageNumber = getNotePageNumber(note);
     if (pageNumber === null) {
@@ -586,84 +736,21 @@
       return;
     }
 
-    scrollToPage(pageNumber);
+    const noteHighlight = note.highlight_id ? getHighlightById(note.highlight_id) ?? note.highlight : null;
+    if (noteHighlight) {
+      const didScroll = scrollHighlightIntoView(noteHighlight);
+      if (!didScroll) {
+        scrollToPage(pageNumber);
+      }
+    } else {
+      scrollToPage(pageNumber);
+    }
     statusMessage = `Jumped to page ${pageNumber}`;
 
-    // If this note is attached to a highlight, attempt to focus or open it.
     if (note.highlight_id) {
-      // allow the PDF scroller and highlight DOM to settle
-      await tick();
-
-      let el: HTMLElement | null = null;
-
-      // Prefer test selector (used in tests/mocks)
-      el = pdfViewerHostEl?.querySelector(`[data-testid="mock-highlight-${note.highlight_id}"]`) as HTMLElement | null;
-
-      // Then try a data attribute selector (used by some viewers)
-      if (!el) {
-        el = pdfViewerHostEl?.querySelector(`[data-highlight-id="${note.highlight_id}"]`) as HTMLElement | null;
-      }
-
-      // Fallback to getElementById (safer than `#id` in querySelector since ids may contain characters that need escaping)
-      if (!el) {
-        el = document.getElementById(String(note.highlight_id)) as HTMLElement | null;
-      }
-
-      // Final fallback: attribute selector for id (escape quotes if any)
-      if (!el) {
-        try {
-          const escaped = String(note.highlight_id).replace(/"/g, '\\"');
-          el = pdfViewerHostEl?.querySelector(`[id="${escaped}"]`) as HTMLElement | null;
-        } catch (e) {
-          // ignore selector construction errors
-          el = null;
-        }
-      }
-
-      if (el) {
-        try {
-          el.scrollIntoView?.({ block: 'start', behavior: 'smooth' } as any);
-        } catch (e) {
-          // ignore
-        }
-
-        const previousOutline = el.style.outline;
-        const previousOutlineOffset = el.style.outlineOffset;
-        const previousTabIndex = el.getAttribute('tabindex');
-        if (previousTabIndex === null) {
-          el.setAttribute('tabindex', '-1');
-        }
-        try {
-          el.focus?.({ preventScroll: true } as any);
-        } catch (e) {
-          // ignore
-        }
-        el.style.outline = '2px solid rgb(34 211 238 / 0.9)';
-        el.style.outlineOffset = '2px';
-        window.setTimeout(() => {
-          el.style.outline = previousOutline;
-          el.style.outlineOffset = previousOutlineOffset;
-          if (previousTabIndex === null) {
-            el.removeAttribute('tabindex');
-          }
-        }, 1200);
-
-        // Try to trigger the viewer's highlight activation (many viewers respond to click)
-        try {
-          el.click?.();
-        } catch (e) {
-          // ignore
-        }
-
-        // Attempt to open the inline note editor/popup as a fallback
-        try {
-          setTimeout(() => void openHighlightNoteEditor(note.highlight_id as string, undefined, 'popup'), 0);
-        } catch (e) {
-          // ignore
-        }
-
-        return;
-      }
+      window.setTimeout(() => {
+        void focusHighlightById(note.highlight_id as string, { openPopup: true, scrollIntoView: false });
+      }, 180);
     }
   }
 
@@ -835,16 +922,29 @@
     if (pages.length === 0) return;
 
     const containerRect = pdfScrollerEl.getBoundingClientRect();
-    const anchor = containerRect.top + Math.min(96, containerRect.height / 4);
+    const anchor = containerRect.top + Math.min(140, Math.max(72, containerRect.height * 0.22));
     let bestPage = currentPage;
+    let bestVisibleArea = -1;
     let bestScore = Number.POSITIVE_INFINITY;
 
     for (const page of pages) {
       const pageNumber = Number(page.dataset.pageNumber || '0');
       if (!pageNumber) continue;
       const rect = page.getBoundingClientRect();
+
+      if (rect.top <= anchor && rect.bottom >= anchor) {
+        bestPage = pageNumber;
+        bestVisibleArea = Number.POSITIVE_INFINITY;
+        break;
+      }
+
+      const visibleTop = Math.max(rect.top, containerRect.top);
+      const visibleBottom = Math.min(rect.bottom, containerRect.bottom);
+      const visibleArea = Math.max(0, visibleBottom - visibleTop);
       const score = Math.abs(rect.top - anchor);
-      if (score < bestScore) {
+
+      if (visibleArea > bestVisibleArea || (visibleArea === bestVisibleArea && score < bestScore)) {
+        bestVisibleArea = visibleArea;
         bestScore = score;
         bestPage = pageNumber;
       }
@@ -921,21 +1021,26 @@
         zoomMode = 'fit-width';
       }
       scheduleHighlightsRefresh();
-      // Restore scroll to last viewed page after the PDF layout settles
-      const savedPage = currentPage;
-      if (savedPage > 1 && pdfScrollerEl) {
-        window.requestAnimationFrame(() => {
+      // Restore scroll to the last viewed page only once after initial PDF layout settles.
+      // Re-running this on later highlight/text-layer renders can yank the reader while scrolling
+      // past image-heavy pages or freshly rendered highlight layers.
+      if (!initialPageRestored) {
+        initialPageRestored = true;
+        const savedPage = currentPage;
+        if (savedPage > 1 && pdfScrollerEl) {
           window.requestAnimationFrame(() => {
-            const pageEl = pdfScrollerEl?.querySelector<HTMLElement>(`.page[data-page-number="${savedPage}"]`);
-            if (pageEl) {
-              pageEl.scrollIntoView({ block: 'start', behavior: 'auto' });
-              currentPage = savedPage;
-              if (totalPages > 0) {
-                statusMessage = `Showing page ${currentPage} of ${totalPages}`;
+            window.requestAnimationFrame(() => {
+              const pageEl = pdfScrollerEl?.querySelector<HTMLElement>(`.page[data-page-number="${savedPage}"]`);
+              if (pageEl) {
+                pageEl.scrollIntoView({ block: 'start', behavior: 'auto' });
+                currentPage = savedPage;
+                if (totalPages > 0) {
+                  statusMessage = `Showing page ${currentPage} of ${totalPages}`;
+                }
               }
-            }
+            });
           });
-        });
+        }
       }
     });
   }
@@ -1522,26 +1627,35 @@
 
     .reader-sidebar-tabs {
       display: flex;
-      padding: 0 18px;
+      gap: 12px;
+      padding: 0 14px;
       border-bottom: 1px solid var(--rule);
       background: rgba(252, 251, 248, 0.96);
       flex-shrink: 0;
     }
 
-    .reader-sidebar-tab {
-      padding: 14px 10px 12px;
-      border-bottom: 1.5px solid transparent;
-      font-family: var(--font-serif);
+    .reader-sidebar .reader-sidebar-tab {
+      position: relative;
+      padding: 12px 2px 10px !important;
+      border: 0 !important;
+      border-bottom: 2px solid transparent !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      font-family: var(--font-serif) !important;
       font-size: 13px;
       font-weight: 400;
       letter-spacing: 0.09em;
-      color: var(--ink-2);
+      color: var(--ink-2) !important;
       text-transform: lowercase;
+      cursor: pointer;
+      opacity: 0.8;
     }
 
-    .reader-sidebar-tab.active {
-      color: var(--ink);
-      border-bottom-color: var(--accent);
+    .reader-sidebar .reader-sidebar-tabs .reader-sidebar-tab.active {
+      color: #9a4a4a !important;
+      border-color: transparent !important;
+      border-bottom: 2px solid #9a4a4a !important;
+      opacity: 1;
     }
 
     .reader-sidebar-search {
@@ -1789,12 +1903,6 @@
       overflow-y: auto;
     }
 
-    .reader-highlights-panel {
-      border-bottom: 0.5px solid var(--rule);
-      padding: 12px 18px;
-      flex-shrink: 0;
-    }
-
     .reader-notes-panel {
       flex: 1;
       min-height: 0;
@@ -1807,7 +1915,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 18px 8px;
+      padding: 10px 14px 6px;
       flex-shrink: 0;
     }
 
@@ -1877,7 +1985,7 @@
 
     .paper-add-note-btn {
       font-size: 12px !important;
-      padding: 4px 10px !important;
+      padding: 3px 8px !important;
     }
 
     .paper-note-group-label {
@@ -1887,18 +1995,31 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--ink-2);
-      padding: 12px 18px 6px;
+      padding: 10px 14px 5px;
       margin: 0;
     }
 
     .paper-note-item {
       border-bottom: 1px solid rgba(22, 19, 15, 0.10);
       border-top: 1px solid rgba(255, 255, 255, 0.6);
-      padding: 12px 18px;
+      padding: 10px 14px;
       background: rgba(255, 253, 249, 0.98);
-      transition: background 0.12s;
+      transition: background 0.12s, box-shadow 0.12s;
     }
     .paper-note-item:hover { background: #ffffff; }
+
+    .paper-annotation-card {
+      cursor: pointer;
+    }
+
+    .paper-annotation-card:focus-visible {
+      outline: 2px solid rgb(166 79 37 / 0.45);
+      outline-offset: -2px;
+    }
+
+    .paper-document-note-card {
+      background: rgba(250, 247, 241, 0.78);
+    }
 
     .paper-note-loc {
       display: flex;
@@ -1919,10 +2040,10 @@
       font-size: 13px;
       font-style: italic;
       color: var(--ink-2);
-      border-left: 2px solid var(--accent);
+      border-left: 3px solid var(--note-quote-color, var(--accent));
       padding-left: 8px;
-      margin-bottom: 8px;
-      line-height: 1.5;
+      margin-bottom: 6px;
+      line-height: 1.45;
     }
 
     .paper-note-body-row {
@@ -1945,8 +2066,12 @@
       font-family: var(--font-mono);
       font-size: 13px;
       font-weight: 400;
-      line-height: 1.65;
+      line-height: 1.5;
       color: var(--ink);
+    }
+
+    .paper-note-body-btn--static {
+      cursor: pointer;
     }
 
     .paper-note-del {
@@ -2086,58 +2211,48 @@
 
   <div class="reader-workspace">
     <aside class="reader-sidebar paper-sidebar">
-      <div class="paper-sidebar-tabs reader-sidebar-tabs">
-        <span class="paper-tab active">notes</span>
-        <span class="paper-tab">highlights</span>
-        <span class="paper-tab">reader</span>
+      <div class="paper-sidebar-tabs reader-sidebar-tabs" role="tablist" aria-label="Sidebar sections">
+        <button
+          type="button"
+          class="reader-sidebar-tab"
+          class:active={sidebarMode === 'annotations'}
+          role="tab"
+          aria-selected={sidebarMode === 'annotations'}
+          on:click={() => { sidebarMode = 'annotations'; }}
+        >highlights</button>
+        <button
+          type="button"
+          class="reader-sidebar-tab"
+          class:active={sidebarMode === 'document-notes'}
+          role="tab"
+          aria-selected={sidebarMode === 'document-notes'}
+          on:click={() => { sidebarMode = 'document-notes'; }}
+        >notes</button>
       </div>
+
       <div class="paper-search reader-sidebar-search">
-        <input type="search" placeholder="search notes…" aria-label="Search notes" />
+        <input
+          type="search"
+          placeholder={sidebarMode === 'annotations' ? 'search annotations…' : 'search document notes…'}
+          aria-label={sidebarMode === 'annotations' ? 'Search annotations' : 'Search document notes'}
+        />
       </div>
-
-      <section class="reader-highlights-panel">
-        <p class="paper-sidebar-section-label">Highlights</p>
-
-        {#if currentPageHighlights.length === 0}
-          <p class="paper-sidebar-empty">No highlights on this page.</p>
-        {:else}
-          <ul class="paper-highlight-list">
-            {#each currentPageHighlights as h, i (h.id ?? i)}
-              <li class="paper-highlight-item">
-                <span class="min-w-0 flex-1 truncate">{h.extracted_text || '(no text extracted)'}</span>
-                <button
-                  type="button"
-                  class="paper-hl-note-btn"
-                  aria-label={getPrimaryNoteForHighlight(h.id) ? 'Edit highlight note' : 'Add highlight note'}
-                  on:click={() => void openHighlightNoteEditor(h.id, undefined, 'sidebar')}
-                >
-                  note
-                </button>
-                <button
-                  type="button"
-                  class="paper-hl-del-btn"
-                  aria-label="Delete highlight"
-                  on:click={() => promptDeleteHighlight(h)}
-                >✕</button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
 
       <section data-testid="notes-sidebar" class="reader-notes-panel">
         <div class="paper-notes-header">
-          <p class="paper-sidebar-section-label">Notes</p>
-          <button
-            type="button"
-            class="paper-btn-accent paper-add-note-btn"
-            on:click={() => void openDocumentNoteEditor()}
-          >
-            Add note
-        </button>
-      </div>
+          <p class="paper-sidebar-section-label">{sidebarMode === 'annotations' ? 'Annotations' : 'Document notes'}</p>
+          {#if sidebarMode === 'document-notes'}
+            <button
+              type="button"
+              class="paper-btn-accent paper-add-note-btn"
+              on:click={() => void openDocumentNoteEditor()}
+            >
+              Add note
+            </button>
+          {/if}
+        </div>
 
-        {#if activeNoteTarget?.kind === 'document'}
+        {#if sidebarMode === 'document-notes' && activeNoteTarget?.kind === 'document'}
           <NoteEditor
             placement="sidebar"
             initialContent={activeNoteRecord?.content ?? ''}
@@ -2149,7 +2264,7 @@
             onClose={() => closeNoteEditor()}
             bind:this={noteEditorRef}
           />
-        {:else if activeNoteTarget?.kind === 'highlight' && noteEditorPlacement === 'sidebar'}
+        {:else if sidebarMode === 'annotations' && activeNoteTarget?.kind === 'highlight' && noteEditorPlacement === 'sidebar'}
           <NoteEditor
             placement="sidebar"
             initialContent={activeNoteRecord?.content ?? ''}
@@ -2164,42 +2279,72 @@
         {/if}
 
         {#if notesLoading}
-          <p class="text-xs text-slate-500">Loading notes…</p>
+          <p class="text-xs text-slate-500">Loading {sidebarMode === 'annotations' ? 'annotations' : 'document notes'}…</p>
         {:else if notesError}
           <p class="text-xs text-rose-300">{notesError}</p>
-        {:else if noteSidebarGroups.documentNotes.length === 0 && noteSidebarGroups.pageGroups.length === 0}
-          <p class="paper-sidebar-empty">No notes yet.</p>
-        {:else}
-          {#if noteSidebarGroups.documentNotes.length > 0}
-            <p class="paper-note-group-label">Document notes</p>
-            {#each noteSidebarGroups.documentNotes as note (note.id)}
-              <div class="paper-note-item">
-                <div class="paper-note-loc"><span class="paper-note-label">standalone</span></div>
-                <div class="paper-note-body-row">
-                  <button type="button" class="paper-note-body-btn" on:click={() => handleSidebarNoteClick(note)}>
-                    <div class="paper-note-body">{note.content || '(empty note)'}</div>
-                  </button>
-                  <button type="button" class="paper-note-del" aria-label="Delete note" on:click={() => handleNoteDelete(note)}>✕</button>
+        {:else if sidebarMode === 'annotations'}
+          {#if highlightSidebarGroups.length === 0}
+            <p class="paper-sidebar-empty">No annotations yet.</p>
+          {:else}
+            {#each highlightSidebarGroups as group (group.pageNumber)}
+              <p class="paper-note-group-label">Page {group.pageNumber}</p>
+              {#each group.highlights as highlight (highlight.id)}
+                {@const highlightNote = getPrimaryNoteForHighlight(highlight.id)}
+                <div
+                  class="paper-note-item paper-annotation-card"
+                  role="button"
+                  tabindex="0"
+                  on:click={() => void handleSidebarHighlightClick(highlight)}
+                  on:keydown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      void handleSidebarHighlightClick(highlight);
+                    }
+                  }}
+                >
+                  <div class="paper-note-quote" style={`--note-quote-color: ${getHighlightColorHex(highlight)};`}>&ldquo;{highlight.extracted_text || '(no text extracted)'}&rdquo;</div>
+                  <div class="paper-note-body-row">
+                    <div class="paper-note-body-btn paper-note-body-btn--static">
+                      <div class="paper-note-body">{highlightNote?.content || 'No note yet.'}</div>
+                    </div>
+                    <button
+                      type="button"
+                      class="paper-hl-note-btn"
+                      aria-label={highlightNote ? 'Edit highlight note' : 'Add highlight note'}
+                      on:click={(event) => {
+                        event.stopPropagation();
+                        void openHighlightNoteEditor(highlight.id, undefined, 'sidebar');
+                      }}
+                    >
+                      note
+                    </button>
+                    <button
+                      type="button"
+                      class="paper-note-del"
+                      aria-label="Delete highlight"
+                      on:click={(event) => {
+                        event.stopPropagation();
+                        promptDeleteHighlight(highlight);
+                      }}
+                    >✕</button>
+                  </div>
                 </div>
-              </div>
+              {/each}
             {/each}
           {/if}
-
-          {#each noteSidebarGroups.pageGroups as group (group.pageNumber)}
-            <p class="paper-note-group-label">Page {group.pageNumber}</p>
-            {#each group.notes as note (note.id)}
-              <div class="paper-note-item">
-                {#if note.highlight?.extracted_text}
-                  <div class="paper-note-quote">&ldquo;{note.highlight.extracted_text}&rdquo;</div>
-                {/if}
-                <div class="paper-note-body-row">
-                  <button type="button" class="paper-note-body-btn" on:click={() => handleSidebarNoteClick(note)}>
-                    <div class="paper-note-body">{note.content || '(empty note)'}</div>
-                  </button>
-                  <button type="button" class="paper-note-del" aria-label="Delete note" on:click={() => handleNoteDelete(note)}>✕</button>
-                </div>
+        {:else if noteSidebarGroups.documentNotes.length === 0}
+          <p class="paper-sidebar-empty">No document notes yet.</p>
+        {:else}
+          {#each noteSidebarGroups.documentNotes as note (note.id)}
+            <div class="paper-note-item paper-document-note-card">
+              <div class="paper-note-loc"><span class="paper-note-label">standalone</span></div>
+              <div class="paper-note-body-row">
+                <button type="button" class="paper-note-body-btn" on:click={() => handleSidebarNoteClick(note)}>
+                  <div class="paper-note-body">{note.content || '(empty note)'}</div>
+                </button>
+                <button type="button" class="paper-note-del" aria-label="Delete note" on:click={() => handleNoteDelete(note)}>✕</button>
               </div>
-            {/each}
+            </div>
           {/each}
         {/if}
       </section>
@@ -2272,11 +2417,17 @@
 <style>
   :global(.reader-pdf-shell .PdfHighlighter) {
     background: var(--paper-bg);
+    overflow-anchor: none;
+  }
+
+  :global(.reader-pdf-shell .pdfViewer) {
+    overflow-anchor: none;
   }
 
   :global(.reader-pdf-shell .pdfViewer .page) {
     margin: 0 auto;
     box-shadow: 0 4px 24px rgb(0 0 0 / 0.15);
+    overflow-anchor: none;
   }
 
   /* thin modern scrollbar */
