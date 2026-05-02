@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import os
 from typing import AsyncIterator, Literal
+from datetime import datetime, timezone
 from uuid import UUID
 from collections import defaultdict
 
@@ -16,7 +17,7 @@ from pydantic import BaseModel
 
 from app.db import get_session, initialize_database
 from app.uploads import create_document_upload
-from app.models import Document, Job, Highlight, Note
+from app.models import Document, Job, Page, Highlight, Note, Embedding
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data")).resolve()
 CORS_ORIGINS = [
@@ -536,4 +537,65 @@ def delete_highlight(highlight_id: UUID, session: Session = Depends(get_session)
     session.execute(sa_delete(Note).where(Note.highlight_id == highlight_id))
     session.delete(h)
     session.commit()
+    return {"deleted": True}
+
+
+@app.delete("/api/documents/{document_id}")
+def delete_document(document_id: UUID, session: Session = Depends(get_session)) -> dict[str, object]:
+    """Soft-delete a document and remove related rows and files.
+
+    The document row is marked with deleted_at so it is excluded from
+    listings; associated jobs, pages, highlights, notes and embeddings are
+    removed immediately to free storage. Physical files (PDF/EPUB/cover)
+    are also deleted from the DATA_DIR if present. This operation is
+    idempotent.
+    """
+    doc = session.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    # mark as deleted
+    now = datetime.now(timezone.utc)
+    doc.deleted_at = now
+    session.add(doc)
+
+    # remove jobs related to this document
+    session.execute(sa_delete(Job).where(Job.document_id == document_id))
+
+    # collect related source ids for embeddings and explicit deletion
+    page_rows = session.exec(select(Page.id).where(Page.document_id == document_id)).all()
+    page_ids = [r[0] for r in page_rows] if page_rows else []
+    hl_rows = session.exec(select(Highlight.id).where(Highlight.document_id == document_id)).all()
+    highlight_ids = [r[0] for r in hl_rows] if hl_rows else []
+    note_rows = session.exec(select(Note.id).where(Note.document_id == document_id)).all()
+    note_ids = [r[0] for r in note_rows] if note_rows else []
+
+    # delete embeddings for pages/highlights/notes
+    if page_ids:
+        session.execute(sa_delete(Embedding).where(Embedding.source_type == 'page', Embedding.source_id.in_(page_ids)))
+    if highlight_ids:
+        session.execute(sa_delete(Embedding).where(Embedding.source_type == 'highlight', Embedding.source_id.in_(highlight_ids)))
+    if note_ids:
+        session.execute(sa_delete(Embedding).where(Embedding.source_type == 'note', Embedding.source_id.in_(note_ids)))
+
+    # explicitly delete notes, highlights and pages so data isn't retained
+    session.execute(sa_delete(Note).where(Note.document_id == document_id))
+    session.execute(sa_delete(Highlight).where(Highlight.document_id == document_id))
+    session.execute(sa_delete(Page).where(Page.document_id == document_id))
+
+    session.commit()
+
+    # remove files on disk if possible; ignore errors
+    try:
+        if doc.file_path:
+            p = Path(doc.file_path)
+            if p.exists():
+                p.unlink()
+        if getattr(doc, "cover_path", None):
+            cp = Path(doc.cover_path)
+            if cp.exists():
+                cp.unlink()
+    except Exception:
+        pass
+
     return {"deleted": True}

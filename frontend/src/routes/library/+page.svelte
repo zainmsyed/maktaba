@@ -349,6 +349,27 @@
     }
     return `/library/${doc.id}`;
   }
+
+  async function deleteDocument(entry: DocWithJobs) {
+    const id = entry?.document?.id;
+    if (!id) return;
+    const title = entry.document?.title || 'Untitled';
+    if (!confirm(`Delete "${title}"? This will remove the document and any associated highlights and notes.`)) {
+      return;
+    }
+    try {
+      const resp = await fetch(`${apiUrl}/api/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const payload = await resp.json();
+      if (payload.deleted) {
+        documents = documents.filter((d) => (d.document?.id ?? d.localId) !== id);
+      } else {
+        throw new Error('Delete failed');
+      }
+    } catch (e) {
+      alert('Failed to delete document: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
 </script>
 
 <svelte:head>
@@ -481,22 +502,28 @@
                 <div class="book-card-footer">
                   <span class="book-card-date">{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</span>
                 </div>
-                {#if entry.highlight_count || entry.note_count}
-                  <div class="book-card-stats">
-                    {#if entry.highlight_count}
-                      <span class="book-stat" title="{entry.highlight_count} highlights">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/><path d="M15 3h6v6"/></svg>
-                        {entry.highlight_count}
-                      </span>
-                    {/if}
-                    {#if entry.note_count}
-                      <span class="book-stat" title="{entry.note_count} notes">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                        {entry.note_count}
-                      </span>
-                    {/if}
-                  </div>
-                {/if}
+                <div class="book-card-actions">
+                  {#if entry.highlight_count || entry.note_count}
+                    <div class="book-card-stats">
+                      {#if entry.highlight_count}
+                        <span class="book-stat" title="{entry.highlight_count} highlights">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/><path d="M15 3h6v6"/></svg>
+                          {entry.highlight_count}
+                        </span>
+                      {/if}
+                      {#if entry.note_count}
+                        <span class="book-stat" title="{entry.note_count} notes">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                          {entry.note_count}
+                        </span>
+                      {/if}
+                    </div>
+                  {/if}
+
+                  <button type="button" class="delete-btn" on:click|preventDefault|stopPropagation={() => deleteDocument(entry)} title="Delete">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  </button>
+                </div>
               </div>
             </svelte:element>
           {/each}
@@ -888,6 +915,21 @@
     flex-shrink: 0;
   }
 
+  .delete-btn {
+    background: transparent;
+    border: none;
+    padding: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #7f1d1d;
+  }
+  .delete-btn:hover {
+    background: rgba(0,0,0,0.03);
+  }
+
   .book-progress-row {
     display: flex;
     align-items: center;
@@ -934,6 +976,14 @@
     font-size: 12px;
     font-weight: 300;
     color: #8a8680;
+  }
+
+  .book-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 2px;
   }
 
   .book-card-stats {
