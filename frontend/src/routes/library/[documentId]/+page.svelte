@@ -264,7 +264,8 @@
     jobStatus === 'processing' ? 'Processing' : jobStatus === 'failed' ? 'Failed' : 'Ready';
   $: jobCountLabel = data.jobs.length === 1 ? '1 background job' : `${data.jobs.length} background jobs`;
   $: noteSidebarGroups = groupNotesForSidebar(notes);
-  $: highlightSidebarGroups = groupHighlightsForSidebar(highlights);
+  // Include notes in dependencies so highlight cards re-render when attached notes change
+  $: highlightSidebarGroups = (notes.length, groupHighlightsForSidebar(highlights));
 
   function clampZoom(value: number) {
     return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
