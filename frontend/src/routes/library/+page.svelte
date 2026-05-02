@@ -105,12 +105,28 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         return {
-          page: Number(parsed.maxPage) || Number(parsed.page) || 0,
+          // Use the user's current position, not furthest reached page.
+          page: Number(parsed.lastPage) || Number(parsed.page) || Number(parsed.maxPage) || 0,
           total: Number(parsed.total) || 1,
         };
       }
     } catch {}
     return { page: 0, total: 1 };
+  }
+
+  function readingProgressPercent(entry: DocWithJobs) {
+    const total = Number(entry.document?.page_count ?? 0);
+    if (total <= 0) return 0;
+
+    const stored = getStoredProgress(entry.document?.id ?? '');
+    const reachedPage = Math.max(0, Math.floor(Number(stored.page) || 0));
+
+    // The reader starts on page 1; treat that baseline as 0% until users advance.
+    if (reachedPage <= 1) return 0;
+    if (reachedPage >= total) return 100;
+    if (total === 1) return reachedPage >= 1 ? 100 : 0;
+
+    return Math.round(((reachedPage - 1) / (total - 1)) * 100);
   }
 
   function progressLabel(entry: DocWithJobs) {
@@ -121,10 +137,7 @@
     if (status === 'failed') return 'Needs attention';
     const total = Number(entry.document?.page_count ?? 0);
     if (total <= 0) return 'Open to read';
-    const stored = getStoredProgress(entry.document?.id ?? '');
-    if (stored.page <= 0) return `${total} pages`;
-    const pct = Math.min(100, Math.max(1, Math.round((stored.page / total) * 100)));
-    return `${pct}%`;
+    return `${readingProgressPercent(entry)}%`;
   }
 
   function progressWidth(entry: DocWithJobs) {
@@ -133,19 +146,11 @@
     const status = jobStatus(entry.jobs);
     if (status === 'processing') return 42;
     if (status === 'failed') return 18;
-    const total = Number(entry.document?.page_count ?? 0);
-    if (total <= 0) return 0;
-    const stored = getStoredProgress(entry.document?.id ?? '');
-    if (stored.page <= 0) return 0;
-    return Math.min(100, Math.max(1, Math.round((stored.page / total) * 100)));
+    return readingProgressPercent(entry);
   }
 
   function progressComplete(entry: DocWithJobs) {
-    const total = Number(entry.document?.page_count ?? 0);
-    if (total <= 0) return false;
-    const stored = getStoredProgress(entry.document?.id ?? '');
-    if (stored.page <= 0) return false;
-    return stored.page >= total;
+    return readingProgressPercent(entry) >= 100;
   }
 
   function humanFormatDate(iso: string | undefined) {
