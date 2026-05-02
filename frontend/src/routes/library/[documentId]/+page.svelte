@@ -15,6 +15,7 @@
     createHighlightClient,
     createNoteClient,
     type BackendHighlight,
+    type BackendHighlightColor,
     type BackendNote,
     type HighlightCreatePayload,
     type LibraryHighlight,
@@ -45,6 +46,7 @@
     id?: string;
     comment?: string | null;
     extracted_text?: string | null;
+    color?: BackendHighlightColor | null;
     content?: { text?: string };
   };
 
@@ -61,7 +63,17 @@
   const MAX_ZOOM = 3;
   const ZOOM_STEP = 0.1;
   const PDF_WORKER_SRC = pdfWorkerSrc;
-  const DEFAULT_HIGHLIGHT_COLOR = '#fde047';
+  const HIGHLIGHT_COLOR_OPTIONS: Array<{
+    name: BackendHighlightColor;
+    label: string;
+    hex: string;
+  }> = [
+    { name: 'yellow', label: 'Yellow', hex: '#fde047' },
+    { name: 'green', label: 'Green', hex: '#bbf7d0' },
+    { name: 'blue', label: 'Blue', hex: '#bfdbfe' },
+    { name: 'red', label: 'Red', hex: '#fecaca' },
+  ];
+  const DEFAULT_HIGHLIGHT_COLOR_INDEX = 0;
   const BLOCKING_JOB_TYPES = new Set(['extract_text', 'ocr']);
 
   let loading = true;
@@ -215,10 +227,11 @@
     }
   }
 
+  let selectedHighlightColorIndex = DEFAULT_HIGHLIGHT_COLOR_INDEX;
   let pdfHighlighterUtils: Partial<PdfHighlighterUtils> = {
     selectedTool: 'highlight_pen',
-    selectedColorIndex: 0,
-    colors: [DEFAULT_HIGHLIGHT_COLOR],
+    selectedColorIndex: selectedHighlightColorIndex,
+    colors: HIGHLIGHT_COLOR_OPTIONS.map((option) => option.hex),
     highlightMixBlendMode: 'multiply',
     textSelectionDelay: -1,
   };
@@ -246,6 +259,45 @@
 
   function clampZoom(value: number) {
     return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+  }
+
+  function clampColorIndex(value: number) {
+    return Math.min(HIGHLIGHT_COLOR_OPTIONS.length - 1, Math.max(0, value));
+  }
+
+  function colorIndexFromName(color: string | null | undefined): number {
+    const normalized = (color || '').toLowerCase();
+    const found = HIGHLIGHT_COLOR_OPTIONS.findIndex((option) => option.name === normalized);
+    return found >= 0 ? found : DEFAULT_HIGHLIGHT_COLOR_INDEX;
+  }
+
+  function colorNameFromIndex(index: number): BackendHighlightColor {
+    return HIGHLIGHT_COLOR_OPTIONS[clampColorIndex(index)]?.name ?? HIGHLIGHT_COLOR_OPTIONS[DEFAULT_HIGHLIGHT_COLOR_INDEX].name;
+  }
+
+  function getCurrentColorIndex(): number {
+    const raw = (pdfHighlighterUtils as any)?.selectedColorIndex;
+    const fallback = typeof selectedHighlightColorIndex === 'number' ? selectedHighlightColorIndex : DEFAULT_HIGHLIGHT_COLOR_INDEX;
+    return clampColorIndex(typeof raw === 'number' ? raw : fallback);
+  }
+
+  function setSelectedHighlightColor(index: number) {
+    const clamped = clampColorIndex(index);
+    selectedHighlightColorIndex = clamped;
+    pdfHighlighterUtils = {
+      ...pdfHighlighterUtils,
+      selectedColorIndex: clamped,
+      colors: HIGHLIGHT_COLOR_OPTIONS.map((option) => option.hex),
+      highlightMixBlendMode: 'multiply',
+      textSelectionDelay: -1,
+    };
+  }
+
+  function getHighlightColorName(highlight: BackendHighlight | null | undefined): BackendHighlightColor {
+    if (highlight?.color) {
+      return colorNameFromIndex(colorIndexFromName(highlight.color));
+    }
+    return colorNameFromIndex(getCurrentColorIndex());
   }
 
   function deriveJobStatus(jobs: Array<{ status?: string; job_type?: string }> | undefined): JobStatus {
@@ -685,6 +737,11 @@
       return;
     }
 
+    const colorIndexFromHighlight = typeof (highlight as any).color_index === 'number'
+      ? clampColorIndex((highlight as any).color_index)
+      : getCurrentColorIndex();
+    payload.color = colorNameFromIndex(colorIndexFromHighlight);
+
     pendingHighlightIds.add(highlightId);
     statusMessage = `Saving highlight on page ${payload.page_number}…`;
 
@@ -696,6 +753,7 @@
       if (highlightId) {
         highlightsStore.editHighlight(highlightId, {
           id: createdHighlight.id,
+          color_index: colorIndexFromName(createdHighlight.color),
           serverPersisted: true,
         } as Partial<LibraryHighlight>);
       }
@@ -710,6 +768,26 @@
       statusMessage = 'Unable to create highlight';
     } finally {
       pendingHighlightIds.delete(highlightId);
+    }
+  }
+
+  async function updateHighlightColor(highlightId: string, color: BackendHighlightColor, setPinned?: (flag: boolean) => void) {
+    const colorIndex = colorIndexFromName(color);
+    setSelectedHighlightColor(colorIndex);
+
+    try {
+      const updatedHighlight = mergeCachedHighlightLocator(await highlightClient.updateHighlight(highlightId, { color }));
+      highlights = highlights.map((highlight) =>
+        highlight.id === highlightId ? updatedHighlight : highlight,
+      );
+      highlightsStore.editHighlight(highlightId, {
+        color_index: colorIndexFromName(updatedHighlight.color),
+      } as Partial<LibraryHighlight>);
+      statusMessage = 'Highlight color updated';
+    } catch (e) {
+      console.error('[highlight] update color error', e);
+      alert('Unable to update highlight color');
+      statusMessage = 'Unable to update highlight color';
     }
   }
 
@@ -873,8 +951,8 @@
     pdfHighlighterUtils = {
       ...pdfHighlighterUtils,
       selectedTool: mode === 'text' ? 'highlight_pen' : 'area_selection',
-      selectedColorIndex: 0,
-      colors: [DEFAULT_HIGHLIGHT_COLOR],
+      selectedColorIndex: getCurrentColorIndex(),
+      colors: HIGHLIGHT_COLOR_OPTIONS.map((option) => option.hex),
       highlightMixBlendMode: 'multiply',
       textSelectionDelay: -1,
     };
@@ -991,12 +1069,33 @@
     {#if highlightNote}
       <p class="hp-note-preview">{highlightNote.content || '(empty note)'}</p>
     {/if}
+    <div class="hp-colors" role="group" aria-label="Highlight colors">
+      {#each HIGHLIGHT_COLOR_OPTIONS as option}
+        <button
+          type="button"
+          class="hp-color-dot {getHighlightColorName(backendHighlight ?? null) === option.name ? 'is-active' : ''}"
+          aria-label={`Set highlight color to ${option.label}`}
+          title={`Set color to ${option.label}`}
+          style={`--hp-color: ${option.hex};`}
+          on:click={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            highlightId && void updateHighlightColor(highlightId, option.name, setPinned);
+          }}
+        ></button>
+      {/each}
+    </div>
     <div class="hp-actions">
       <button
         type="button"
         class="hp-action-btn"
         aria-label={highlightNote ? 'Edit note' : 'Add note'}
-        on:click={(e) => { (e.currentTarget as HTMLElement).blur(); void openHighlightNoteEditor(highlightId, setPinned, 'popup'); }}
+        on:click={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          (e.currentTarget as HTMLElement).blur();
+          void openHighlightNoteEditor(highlightId, setPinned, 'popup');
+        }}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
         {highlightNote ? 'edit note' : 'add note'}
@@ -1292,6 +1391,29 @@
       padding-left: 8px;
       margin: 0 0 8px;
       line-height: 1.55;
+    }
+    .hp-colors {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 2px;
+    }
+    .hp-color-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(26,24,20,0.2);
+      background: var(--hp-color);
+      cursor: pointer;
+      transition: transform 0.12s, border-color 0.12s;
+    }
+    .hp-color-dot:hover {
+      transform: translateY(-1px);
+      border-color: rgba(26,24,20,0.45);
+    }
+    .hp-color-dot.is-active {
+      border-color: rgba(26,24,20,0.7);
+      box-shadow: 0 0 0 1px rgba(26,24,20,0.3);
     }
     .hp-actions {
       display: flex;
