@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { beforeNavigate, goto } from '$app/navigation';
+  import { beforeNavigate, goto, replaceState } from '$app/navigation';
   import { page } from '$app/stores';
   import { onMount, tick } from 'svelte';
   import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -65,6 +65,11 @@
   type HighlightGroup = {
     pageNumber: number;
     highlights: BackendHighlight[];
+  };
+
+  type QueryJumpTarget = {
+    highlightId: string | null;
+    pageNumber: number | null;
   };
 
   const MIN_ZOOM = 0.5;
@@ -183,8 +188,12 @@
   let pdfScrollerEl: HTMLElement | null = null;
   let scrollFrame: number | null = null;
   let highlightsRefreshFrame: number | null = null;
+  let queryJumpFrame: number | null = null;
   let initialZoomApplied = false;
   let initialPageRestored = false;
+  let pendingQueryJumpTarget: QueryJumpTarget | null = null;
+  let queryJumpDataLoaded = false;
+  let queryJumpApplied = false;
 
   let highlights: BackendHighlight[] = [];
   const highlightsStore = new HighlightsModel<LibraryHighlight>([]);
@@ -849,40 +858,68 @@
     }
   }
 
-  // Jump to a highlight or page from URL query params after content loads.
-  async function jumpFromQueryParams() {
-    if (!browser) return;
+  function readQueryJumpTarget(): QueryJumpTarget | null {
+    if (!browser) return null;
     const params = new URLSearchParams(window.location.search);
     const highlightId = params.get('highlight');
     const pageParam = params.get('page');
+    const pageNumber = pageParam ? Number(pageParam) : null;
+    const validPageNumber = pageNumber && !Number.isNaN(pageNumber) && pageNumber > 0 ? pageNumber : null;
+    if (!highlightId && !validPageNumber) return null;
+    return { highlightId, pageNumber: validPageNumber };
+  }
 
-    if (highlightId) {
-      const highlight = getHighlightById(highlightId);
-      if (highlight) {
-        await tick();
-        const didScroll = scrollHighlightIntoView(highlight);
-        if (!didScroll) scrollToPage(highlight.page_number);
-        window.setTimeout(() => {
-          void focusHighlightById(highlightId, { openPopup: true, scrollIntoView: false });
-        }, 280);
-      }
-    } else if (pageParam) {
-      const pageNumber = Number(pageParam);
-      if (!Number.isNaN(pageNumber) && pageNumber > 0) {
-        await tick();
-        scrollToPage(pageNumber);
-      }
+  function clearQueryJumpParams() {
+    if (!browser) return;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('highlight');
+      url.searchParams.delete('page');
+      replaceState(url.pathname + url.search + url.hash, $page.state);
+    } catch {}
+  }
+
+  async function applyQueryJumpTarget(target: QueryJumpTarget) {
+    await tick();
+    ensurePdfScroller();
+    if (!pdfScrollerEl) return false;
+
+    if (target.highlightId) {
+      const highlight = getHighlightById(target.highlightId);
+      if (!highlight) return false;
+      const didScroll = scrollHighlightIntoView(highlight) || scrollToPage(highlight.page_number);
+      if (!didScroll) return false;
+      window.setTimeout(() => {
+        void focusHighlightById(target.highlightId as string, { openPopup: true, scrollIntoView: false });
+      }, 280);
+      return true;
     }
 
-    // Clean query params from URL so refresh doesn't re-jump
-    if (highlightId || pageParam) {
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('highlight');
-        url.searchParams.delete('page');
-        window.history.replaceState({}, '', url.toString());
-      } catch {}
+    if (target.pageNumber) {
+      return scrollToPage(target.pageNumber);
     }
+
+    return false;
+  }
+
+  function scheduleQueryJump() {
+    if (!browser || !pendingQueryJumpTarget || !queryJumpDataLoaded || queryJumpApplied || queryJumpFrame !== null) return;
+    ensurePdfScroller();
+    if (!pdfScrollerEl) return;
+
+    queryJumpFrame = window.requestAnimationFrame(() => {
+      queryJumpFrame = window.requestAnimationFrame(() => {
+        queryJumpFrame = null;
+        const target = pendingQueryJumpTarget;
+        if (!target || queryJumpApplied) return;
+        void applyQueryJumpTarget(target).then((didJump) => {
+          if (!didJump) return;
+          queryJumpApplied = true;
+          pendingQueryJumpTarget = null;
+          clearQueryJumpParams();
+        });
+      });
+    });
   }
 
   async function persistLibraryHighlight(highlight: LibraryHighlight) {
@@ -1091,10 +1128,11 @@
         zoomMode = 'fit-width';
       }
       scheduleHighlightsRefresh();
+      scheduleQueryJump();
       // Restore scroll to the last viewed page only once after initial PDF layout settles.
       // Re-running this on later highlight/text-layer renders can yank the reader while scrolling
-      // past image-heavy pages or freshly rendered highlight layers.
-      if (!initialPageRestored) {
+      // past image-heavy pages, freshly rendered highlight layers, or explicit search-result jumps.
+      if (!initialPageRestored && !pendingQueryJumpTarget) {
         initialPageRestored = true;
         const savedPage = currentPage;
         if (savedPage > 1 && pdfScrollerEl) {
@@ -1173,15 +1211,16 @@
   }
 
   function scrollToPage(pageNumber: number) {
-    if (!pdfScrollerEl) return;
+    if (!pdfScrollerEl) return false;
     const clampedPage = Math.min(Math.max(pageNumber, 1), totalPages || pageNumber);
     const pageEl = pdfScrollerEl.querySelector<HTMLElement>(`.page[data-page-number="${clampedPage}"]`);
-    if (!pageEl) return;
+    if (!pageEl) return false;
     currentPage = clampedPage;
     pageEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
     if (totalPages > 0) {
       statusMessage = `Showing page ${currentPage} of ${totalPages}`;
     }
+    return true;
   }
 
   function goToPreviousPage() {
@@ -1198,6 +1237,10 @@
     if (typeof window !== 'undefined') {
       window.scrollTo(0, 0);
       history.scrollRestoration = 'manual';
+      pendingQueryJumpTarget = readQueryJumpTarget();
+      if (pendingQueryJumpTarget) {
+        initialPageRestored = true;
+      }
       try {
         localStorage.setItem('maktaba:lastDocumentId', data.document.id);
       } catch {}
@@ -1206,7 +1249,8 @@
     syncHighlightsStore();
     void loadHighlights().then(() => {
       void loadNotes().then(() => {
-        void jumpFromQueryParams();
+        queryJumpDataLoaded = true;
+        scheduleQueryJump();
       });
     });
     setHighlightMode('text');
@@ -1227,6 +1271,9 @@
         }
         if (highlightsRefreshFrame !== null) {
           window.cancelAnimationFrame(highlightsRefreshFrame);
+        }
+        if (queryJumpFrame !== null) {
+          window.cancelAnimationFrame(queryJumpFrame);
         }
       }
     };

@@ -92,10 +92,11 @@
   function handleResultClick(result: typeof searchResults[0]) {
     clearSearch();
     if (!result.document_id) return;
-    // Navigate to reader; the reader will restore last page or jump via highlight.
+    // Navigate to reader; explicit search targets should override normal progress restoration.
     const url = new URL(`/library/${result.document_id}`, window.location.href);
-    if (result.highlight_id) {
-      url.searchParams.set('highlight', result.highlight_id);
+    const highlightId = result.highlight_id || (result.source_type === 'highlight' ? result.id : null);
+    if (highlightId) {
+      url.searchParams.set('highlight', highlightId);
     } else if (result.page_number) {
       url.searchParams.set('page', String(result.page_number));
     }
