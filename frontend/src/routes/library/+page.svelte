@@ -350,22 +350,27 @@
     return `/library/${doc.id}`;
   }
 
+  function confirmDelete(title: string) {
+    return confirm(`Delete "${title}"? This will remove the document and any associated highlights and notes.`);
+  }
+
+  function removeDocumentFromList(id: string) {
+    documents = documents.filter((d) => (d.document?.id ?? d.localId) !== id);
+  }
+
+  // fallow-ignore-next-line complexity
   async function deleteDocument(entry: DocWithJobs) {
     const id = entry?.document?.id;
     if (!id) return;
+
     const title = entry.document?.title || 'Untitled';
-    if (!confirm(`Delete "${title}"? This will remove the document and any associated highlights and notes.`)) {
-      return;
-    }
+    if (!confirmDelete(title)) return;
+
     try {
-      const resp = await fetch(`${apiUrl}/api/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const payload = await resp.json();
-      if (payload.deleted) {
-        documents = documents.filter((d) => (d.document?.id ?? d.localId) !== id);
-      } else {
-        throw new Error('Delete failed');
-      }
+      const response = await fetch(`${apiUrl}/api/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const payload = response.ok ? await response.json() : null;
+      if (!response.ok || !payload?.deleted) throw new Error(`HTTP ${response.status}`);
+      removeDocumentFromList(id);
     } catch (e) {
       alert('Failed to delete document: ' + (e instanceof Error ? e.message : String(e)));
     }

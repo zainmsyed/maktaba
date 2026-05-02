@@ -1,6 +1,6 @@
 import type { Highlight } from 'svelte-pdf-highlighter';
 
-export type BackendHighlightRect = {
+type BackendHighlightRect = {
   x1: number;
   y1: number;
   x2: number;
@@ -63,21 +63,36 @@ export type HighlightCreatePayload = {
   color?: BackendHighlightColor;
 };
 
-export type HighlightUpdatePayload = {
+type HighlightUpdatePayload = {
   color?: BackendHighlightColor;
 };
 
-export type NoteCreatePayload = {
+type NoteCreatePayload = {
   content: string;
   highlight_id?: string | null;
 };
 
-export type NoteUpdatePayload = {
+type NoteUpdatePayload = {
   content: string;
 };
 
 function clamp01(value: number) {
   return Math.min(1, Math.max(0, value));
+}
+
+async function parseJsonOrThrow<T>(response: Response, message: string): Promise<T> {
+  if (!response.ok) {
+    const txt = await response.text();
+    throw new Error(`${message}: ${response.status} ${txt}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function expectOk(response: Response, message: string): Promise<void> {
+  if (!response.ok) {
+    const txt = await response.text();
+    throw new Error(`${message}: ${response.status} ${txt}`);
+  }
 }
 
 function normalizeRect(rect: BackendHighlightRect, fallbackPageNumber: number): BackendHighlightRect {
@@ -174,13 +189,11 @@ export function createHighlightClient(apiUrl: string, documentId: string) {
 
   return {
     async fetchHighlights(): Promise<BackendHighlight[]> {
-      const resp = await fetch(highlightCollectionUrl);
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`Failed to load highlights: ${resp.status} ${txt}`);
-      }
-      const payload = await resp.json();
-      return (payload.highlights || []) as BackendHighlight[];
+      const payload = await parseJsonOrThrow<{ highlights?: BackendHighlight[] }>(
+        await fetch(highlightCollectionUrl),
+        'Failed to load highlights',
+      );
+      return payload.highlights || [];
     },
 
     async createHighlight(payload: HighlightCreatePayload): Promise<BackendHighlight> {
@@ -201,13 +214,11 @@ export function createHighlightClient(apiUrl: string, documentId: string) {
         }),
       });
 
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`Failed to create highlight: ${resp.status} ${txt}`);
-      }
-
-      const json = await resp.json();
-      return json.highlight as BackendHighlight;
+      const json = await parseJsonOrThrow<{ highlight: BackendHighlight }>(
+        resp,
+        'Failed to create highlight',
+      );
+      return json.highlight;
     },
 
     async updateHighlight(highlightId: string, payload: HighlightUpdatePayload): Promise<BackendHighlight> {
@@ -219,21 +230,18 @@ export function createHighlightClient(apiUrl: string, documentId: string) {
         }),
       });
 
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`Failed to update highlight: ${resp.status} ${txt}`);
-      }
-
-      const json = await resp.json();
-      return json.highlight as BackendHighlight;
+      const json = await parseJsonOrThrow<{ highlight: BackendHighlight }>(
+        resp,
+        'Failed to update highlight',
+      );
+      return json.highlight;
     },
 
     async deleteHighlight(highlightId: string): Promise<void> {
-      const resp = await fetch(highlightUrl(highlightId), { method: 'DELETE' });
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`Failed to delete highlight: ${resp.status} ${txt}`);
-      }
+      await expectOk(
+        await fetch(highlightUrl(highlightId), { method: 'DELETE' }),
+        'Failed to delete highlight',
+      );
     },
   };
 }
@@ -244,13 +252,11 @@ export function createNoteClient(apiUrl: string, documentId: string) {
 
   return {
     async fetchNotes(): Promise<BackendNote[]> {
-      const resp = await fetch(notesCollectionUrl);
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`Failed to load notes: ${resp.status} ${txt}`);
-      }
-      const payload = await resp.json();
-      return (payload.notes || []) as BackendNote[];
+      const payload = await parseJsonOrThrow<{ notes?: BackendNote[] }>(
+        await fetch(notesCollectionUrl),
+        'Failed to load notes',
+      );
+      return payload.notes || [];
     },
 
     async createNote(payload: NoteCreatePayload): Promise<BackendNote> {
@@ -263,13 +269,8 @@ export function createNoteClient(apiUrl: string, documentId: string) {
         }),
       });
 
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`Failed to create note: ${resp.status} ${txt}`);
-      }
-
-      const json = await resp.json();
-      return json.note as BackendNote;
+      const json = await parseJsonOrThrow<{ note: BackendNote }>(resp, 'Failed to create note');
+      return json.note;
     },
 
     async updateNote(noteId: string, payload: NoteUpdatePayload): Promise<BackendNote> {
@@ -281,21 +282,12 @@ export function createNoteClient(apiUrl: string, documentId: string) {
         }),
       });
 
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`Failed to update note: ${resp.status} ${txt}`);
-      }
-
-      const json = await resp.json();
-      return json.note as BackendNote;
+      const json = await parseJsonOrThrow<{ note: BackendNote }>(resp, 'Failed to update note');
+      return json.note;
     },
 
     async deleteNote(noteId: string): Promise<void> {
-      const resp = await fetch(noteUrl(noteId), { method: 'DELETE' });
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`Failed to delete note: ${resp.status} ${txt}`);
-      }
+      await expectOk(await fetch(noteUrl(noteId), { method: 'DELETE' }), 'Failed to delete note');
     },
   };
 }
