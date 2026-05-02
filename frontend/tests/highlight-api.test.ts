@@ -43,6 +43,7 @@ describe('highlight-api helpers', () => {
   it('maps persisted text highlights back to line rects instead of one area box', () => {
     const backendHighlight: BackendHighlight = {
       id: 'highlight-2',
+      color: 'green',
       highlight_type: 'text',
       page_number: 7,
       x: 0.1,
@@ -59,6 +60,7 @@ describe('highlight-api helpers', () => {
     const libraryHighlight = backendToLibraryHighlight(backendHighlight);
 
     expect(libraryHighlight.type).toBe('text');
+    expect(libraryHighlight.color_index).toBe(1);
     expect(libraryHighlight.position?.rects).toEqual(backendHighlight.rects);
   });
 

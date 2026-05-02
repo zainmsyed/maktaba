@@ -435,6 +435,56 @@ class DocumentUploadTests(unittest.TestCase):
             self.assertIsNone(session.get(Highlight, highlight_id))
             self.assertIsNone(session.get(Note, note_id))
 
+    def test_update_highlight_color(self) -> None:
+        pdf_bytes = self._build_pdf_bytes(
+            title="Update Highlight Color PDF",
+            author="Highlight Color Test",
+            creation_date="D:20240424010203Z",
+        )
+
+        response = self.client.post(
+            "/api/documents",
+            files={"file": ("highlight-color.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(response.status_code, 201)
+        document_id = response.json()["document"]["id"]
+
+        create_highlight_resp = self.client.post(
+            f"/api/documents/{document_id}/highlights",
+            json={
+                "page_number": 1,
+                "x": 0.1,
+                "y": 0.2,
+                "width": 0.3,
+                "height": 0.2,
+                "color": "yellow",
+                "highlight_type": "area",
+                "rects": [],
+                "extracted_text": "highlight",
+            },
+        )
+        self.assertEqual(create_highlight_resp.status_code, 200)
+        highlight_id = create_highlight_resp.json()["highlight"]["id"]
+
+        update_resp = self.client.patch(
+            f"/api/highlights/{highlight_id}",
+            json={"color": "blue"},
+        )
+        self.assertEqual(update_resp.status_code, 200)
+        self.assertEqual(update_resp.json()["highlight"]["color"], "blue")
+
+        list_resp = self.client.get(f"/api/documents/{document_id}/highlights")
+        self.assertEqual(list_resp.status_code, 200)
+        highlights = list_resp.json()["highlights"]
+        self.assertEqual(len(highlights), 1)
+        self.assertEqual(highlights[0]["color"], "blue")
+
+        invalid_resp = self.client.patch(
+            f"/api/highlights/{highlight_id}",
+            json={"color": "purple"},
+        )
+        self.assertEqual(invalid_resp.status_code, 422)
+
     def test_note_creation_listing_and_update_for_highlight_and_document_notes(self) -> None:
         pdf_bytes = self._build_pdf_bytes(
             title="Notes PDF",

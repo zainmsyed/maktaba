@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 import os
-from typing import AsyncIterator
+from typing import AsyncIterator, Literal
 from uuid import UUID
 from collections import defaultdict
 
@@ -207,16 +207,23 @@ def list_documents(session: Session = Depends(get_session)) -> dict[str, object]
     return {"documents": result}
 
 
+HighlightColor = Literal["yellow", "green", "blue", "red"]
+
+
 class HighlightCreate(BaseModel):
     page_number: int
     x: float
     y: float
     width: float
     height: float
-    color: str | None = None
+    color: HighlightColor | None = None
     extracted_text: str | None = None
     highlight_type: str | None = None
     rects: list[dict[str, object]] | None = None
+
+
+class HighlightUpdate(BaseModel):
+    color: HighlightColor
 
 
 class NoteCreate(BaseModel):
@@ -317,6 +324,24 @@ def list_highlights(document_id: UUID, session: Session = Depends(get_session)) 
         obj.pop("fts", None)
         result.append(obj)
     return {"highlights": result}
+
+
+@app.patch("/api/highlights/{highlight_id}")
+def update_highlight(
+    highlight_id: UUID,
+    payload: HighlightUpdate = Body(...),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    highlight = session.get(Highlight, highlight_id)
+    if highlight is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Highlight not found")
+
+    highlight.color = payload.color
+    session.add(highlight)
+    session.commit()
+    session.refresh(highlight)
+
+    return {"highlight": serialize_highlight(highlight)}
 
 
 @app.get("/api/documents/{document_id}/notes")

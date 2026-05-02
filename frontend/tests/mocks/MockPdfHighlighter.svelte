@@ -55,6 +55,9 @@
   function createTextHighlight() {
     highlightsStore.addHighlight({
       type: 'text',
+      color_index: typeof (pdfHighlighterUtils as any)?.selectedColorIndex === 'number'
+        ? (pdfHighlighterUtils as any).selectedColorIndex
+        : 0,
       content: { text: 'Selectable highlight text' },
       position: {
         boundingRect: {

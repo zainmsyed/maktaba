@@ -10,11 +10,21 @@ export type BackendHighlightRect = {
   pageNumber: number;
 };
 
+export type BackendHighlightColor = 'yellow' | 'green' | 'blue' | 'red';
+
+const BACKEND_HIGHLIGHT_COLORS: BackendHighlightColor[] = ['yellow', 'green', 'blue', 'red'];
+
+function colorNameToIndex(color: string | null | undefined): number {
+  const normalized = (color || '').toLowerCase();
+  const found = BACKEND_HIGHLIGHT_COLORS.indexOf(normalized as BackendHighlightColor);
+  return found >= 0 ? found : 0;
+}
+
 export type BackendHighlight = {
   id: string;
   format?: string | null;
   highlight_type?: 'text' | 'area' | null;
-  color?: string | null;
+  color?: BackendHighlightColor | null;
   extracted_text?: string | null;
   page_number: number;
   x: number;
@@ -50,6 +60,11 @@ export type HighlightCreatePayload = {
   extracted_text?: string;
   highlight_type?: 'text' | 'area';
   rects?: BackendHighlightRect[];
+  color?: BackendHighlightColor;
+};
+
+export type HighlightUpdatePayload = {
+  color?: BackendHighlightColor;
 };
 
 export type NoteCreatePayload = {
@@ -117,7 +132,7 @@ export function backendToLibraryHighlight(highlight: BackendHighlight): LibraryH
       boundingRect,
       rects: type === 'text' ? rects : [],
     },
-    color_index: 0,
+    color_index: colorNameToIndex(highlight.color),
     serverPersisted: true,
   };
 }
@@ -174,7 +189,7 @@ export function createHighlightClient(apiUrl: string, documentId: string) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           format: 'pdf',
-          color: 'yellow',
+          color: payload.color ?? 'yellow',
           extracted_text: payload.extracted_text ?? '',
           highlight_type: payload.highlight_type ?? 'area',
           rects: payload.rects ?? [],
@@ -189,6 +204,24 @@ export function createHighlightClient(apiUrl: string, documentId: string) {
       if (!resp.ok) {
         const txt = await resp.text();
         throw new Error(`Failed to create highlight: ${resp.status} ${txt}`);
+      }
+
+      const json = await resp.json();
+      return json.highlight as BackendHighlight;
+    },
+
+    async updateHighlight(highlightId: string, payload: HighlightUpdatePayload): Promise<BackendHighlight> {
+      const resp = await fetch(highlightUrl(highlightId), {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          color: payload.color,
+        }),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Failed to update highlight: ${resp.status} ${txt}`);
       }
 
       const json = await resp.json();

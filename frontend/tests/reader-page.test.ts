@@ -99,6 +99,23 @@ beforeEach(() => {
       return jsonResponse({ highlight });
     }
 
+    if (method === 'PATCH' && /\/api\/highlights\/[^/]+$/.test(url)) {
+      const highlightId = url.split('/').pop() ?? '';
+      const existing = highlightRecords.get(highlightId);
+      if (!existing) {
+        return jsonResponse({ detail: 'Highlight not found' }, 404);
+      }
+
+      const payload = JSON.parse(String(init?.body || '{}'));
+      const nextHighlight = {
+        ...existing,
+        color: payload.color ?? existing.color,
+        updated_at: new Date().toISOString(),
+      };
+      highlightRecords.set(highlightId, nextHighlight);
+      return jsonResponse({ highlight: nextHighlight });
+    }
+
     if (method === 'GET' && /\/api\/documents\/[^/]+\/highlights$/.test(url)) {
       return jsonResponse({ highlights: [...highlightRecords.values()] });
     }
@@ -280,6 +297,43 @@ describe('reader page', () => {
             pageNumber: 1,
           },
         ],
+      });
+    });
+  });
+
+  it('updates highlight color from the hover popup palette', async () => {
+    const { getByTestId, getByRole } = render(ReaderPage, {
+      props: {
+        data: {
+          apiUrl: 'http://api.test',
+          fileUrl: 'http://api.test/api/documents/doc-1/file',
+          document: {
+            id: 'doc-1',
+            title: 'Highlight Color Test',
+            authors: ['Ada Lovelace'],
+            format: 'pdf',
+            page_count: 1,
+          },
+          jobs: [],
+        },
+      },
+    });
+
+    const textLayerHost = await waitFor(() => getByTestId('pdf-text-layer-host'));
+    await fireEvent.mouseUp(textLayerHost);
+
+    const greenButton = await waitFor(() =>
+      getByRole('button', { name: /set highlight color to green/i }),
+    );
+    await fireEvent.click(greenButton);
+
+    await waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find(
+        ([input, init]) => init?.method === 'PATCH' && String(input).includes('/api/highlights/highlight-1'),
+      );
+      expect(patchCall).toBeTruthy();
+      expect(JSON.parse(String(patchCall?.[1]?.body))).toMatchObject({
+        color: 'green',
       });
     });
   });
