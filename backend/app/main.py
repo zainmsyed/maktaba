@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
-from sqlalchemy import delete as sa_delete, func, select, text
+from sqlalchemy import delete as sa_delete, func, select, text, literal, cast, String
 from pydantic import BaseModel
 
 from app.db import get_session, initialize_database
@@ -472,12 +472,12 @@ def search(
     highlight_stmt = (
         select(
             Highlight.id,
-            text("'highlight'").label("source_type"),
+            literal("highlight").label("source_type"),
             Highlight.document_id,
             Document.title.label("document_title"),
             Highlight.page_number,
             Highlight.extracted_text.label("content"),
-            func.cast(None, func.typeof(Highlight.id)).label("highlight_id"),
+            cast(None, String).label("highlight_id"),
             func.ts_rank_cd(Highlight.fts, ts_query).label("rank"),
         )
         .join(Document, Highlight.document_id == Document.id)
@@ -490,12 +490,12 @@ def search(
     note_stmt = (
         select(
             Note.id,
-            text("'note'").label("source_type"),
+            literal("note").label("source_type"),
             Note.document_id,
             Document.title.label("document_title"),
             Highlight.page_number,
             Note.content,
-            Note.highlight_id,
+            cast(Note.highlight_id, String).label("highlight_id"),
             func.ts_rank_cd(Note.fts, ts_query).label("rank"),
         )
         .join(Document, Note.document_id == Document.id)
