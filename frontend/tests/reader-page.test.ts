@@ -447,6 +447,72 @@ describe('reader page', () => {
     });
   });
 
+  it('filters sidebar annotations and document notes from the search box', async () => {
+    vi.useFakeTimers();
+
+    const { getByRole, getAllByRole, getByTestId, queryByText } = render(ReaderPage, {
+      props: {
+        data: {
+          apiUrl: 'http://api.test',
+          fileUrl: 'http://api.test/api/documents/doc-1/file',
+          document: {
+            id: 'doc-1',
+            title: 'Search Test',
+            authors: ['Ada Lovelace'],
+            format: 'pdf',
+            page_count: 3,
+          },
+          jobs: [],
+        },
+      },
+    });
+
+    await advanceAndFlush(0);
+    const textLayerHost = getByTestId('pdf-text-layer-host');
+    await fireEvent.mouseUp(textLayerHost);
+    await advanceAndFlush(0);
+
+    const addHighlightNoteButton = getByRole('button', { name: /add highlight note/i });
+    await fireEvent.click(addHighlightNoteButton);
+    await advanceAndFlush(0);
+
+    const textarea = await waitFor(() => getByRole('textbox', { name: 'Note content' }));
+    await fireEvent.input(textarea, { target: { value: 'alpha note match' } });
+    await advanceAndFlush(500);
+    await advanceAndFlush(0);
+
+    const annotationSearch = getByRole('searchbox', { name: 'Search annotations' });
+    await fireEvent.input(annotationSearch, { target: { value: 'alpha' } });
+    await advanceAndFlush(0);
+    expect(queryByText('No annotations match your search.')).toBeNull();
+
+    await fireEvent.input(annotationSearch, { target: { value: 'zzz-no-match' } });
+    await advanceAndFlush(0);
+    expect(queryByText('No annotations match your search.')).toBeTruthy();
+
+    const notesTab = getByRole('tab', { name: 'notes' });
+    await fireEvent.click(notesTab);
+    await advanceAndFlush(0);
+
+    const addNoteButton = getAllByRole('button', { name: 'Add note' }).at(0) as HTMLElement;
+    await fireEvent.click(addNoteButton);
+    await advanceAndFlush(0);
+
+    const documentNoteTextarea = await waitFor(() => getByRole('textbox', { name: 'Note content' }));
+    await fireEvent.input(documentNoteTextarea, { target: { value: 'standalone reflection' } });
+    await advanceAndFlush(500);
+    await advanceAndFlush(0);
+
+    const noteSearch = getByRole('searchbox', { name: 'Search document notes' });
+    await fireEvent.input(noteSearch, { target: { value: 'reflection' } });
+    await advanceAndFlush(0);
+    expect(queryByText('No document notes match your search.')).toBeNull();
+
+    await fireEvent.input(noteSearch, { target: { value: 'zzz-no-match' } });
+    await advanceAndFlush(0);
+    expect(queryByText('No document notes match your search.')).toBeTruthy();
+  });
+
   it('sidebar click focuses highlight and opens the highlight popup/editor', async () => {
     vi.useFakeTimers();
     const { getByRole, getByText, getByTestId } = render(ReaderPage, {

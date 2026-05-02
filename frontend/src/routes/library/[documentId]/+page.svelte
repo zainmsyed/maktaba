@@ -203,7 +203,10 @@
     pageGroups: [],
   };
   let highlightSidebarGroups: HighlightGroup[] = [];
+  let filteredHighlightSidebarGroups: HighlightGroup[] = [];
+  let filteredDocumentNotes: BackendNote[] = [];
   let sidebarMode: SidebarMode = 'annotations';
+  let sidebarSearchQuery = '';
   let activeNoteTarget: NoteEditorTarget | null = null;
   let activeNoteRecord: BackendNote | null = null;
   let noteDraft = '';
@@ -267,6 +270,8 @@
   $: noteSidebarGroups = groupNotesForSidebar(notes);
   // Include notes in dependencies so highlight cards re-render when attached notes change
   $: highlightSidebarGroups = (notes.length, groupHighlightsForSidebar(highlights));
+  $: filteredHighlightSidebarGroups = filterHighlightGroups(highlightSidebarGroups, sidebarSearchQuery);
+  $: filteredDocumentNotes = filterDocumentNotesForSidebar(noteSidebarGroups.documentNotes, sidebarSearchQuery);
 
   function clampZoom(value: number) {
     return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
@@ -394,6 +399,36 @@
 
   function getPrimaryNoteForHighlight(highlightId: string | undefined | null) {
     return getNotesForHighlight(highlightId)[0] ?? null;
+  }
+
+  function normalizeSidebarSearch(value: string | null | undefined) {
+    return (value ?? '').trim().toLowerCase();
+  }
+
+  function matchesSidebarSearch(query: string, ...parts: Array<string | null | undefined>) {
+    if (!query) return true;
+    return parts.some((part) => (part ?? '').toLowerCase().includes(query));
+  }
+
+  function filterHighlightGroups(groups: HighlightGroup[] = [], rawQuery = ''): HighlightGroup[] {
+    const query = normalizeSidebarSearch(rawQuery);
+    if (!query) return groups;
+
+    return groups
+      .map((group) => ({
+        ...group,
+        highlights: group.highlights.filter((highlight) => {
+          const note = getPrimaryNoteForHighlight(highlight.id);
+          return matchesSidebarSearch(query, highlight.extracted_text, note?.content);
+        }),
+      }))
+      .filter((group) => group.highlights.length > 0);
+  }
+
+  function filterDocumentNotesForSidebar(records: BackendNote[] = [], rawQuery = ''): BackendNote[] {
+    const query = normalizeSidebarSearch(rawQuery);
+    if (!query) return records;
+    return records.filter((note) => matchesSidebarSearch(query, note.content));
   }
 
   function getHighlightById(highlightId: string | undefined | null) {
@@ -2271,6 +2306,7 @@
       <div class="paper-search reader-sidebar-search">
         <input
           type="search"
+          bind:value={sidebarSearchQuery}
           placeholder={sidebarMode === 'annotations' ? 'search annotations…' : 'search document notes…'}
           aria-label={sidebarMode === 'annotations' ? 'Search annotations' : 'Search document notes'}
         />
@@ -2321,10 +2357,10 @@
         {:else if notesError}
           <p class="text-xs text-rose-300">{notesError}</p>
         {:else if sidebarMode === 'annotations'}
-          {#if highlightSidebarGroups.length === 0}
-            <p class="paper-sidebar-empty">No annotations yet.</p>
+          {#if filteredHighlightSidebarGroups.length === 0}
+            <p class="paper-sidebar-empty">{normalizeSidebarSearch(sidebarSearchQuery) ? 'No annotations match your search.' : 'No annotations yet.'}</p>
           {:else}
-            {#each highlightSidebarGroups as group (group.pageNumber)}
+            {#each filteredHighlightSidebarGroups as group (group.pageNumber)}
               <p class="paper-note-group-label">Page {group.pageNumber}</p>
               {#each group.highlights as highlight (highlight.id)}
                 {@const highlightNote = getPrimaryNoteForHighlight(highlight.id)}
@@ -2370,10 +2406,10 @@
               {/each}
             {/each}
           {/if}
-        {:else if noteSidebarGroups.documentNotes.length === 0}
-          <p class="paper-sidebar-empty">No document notes yet.</p>
+        {:else if filteredDocumentNotes.length === 0}
+          <p class="paper-sidebar-empty">{normalizeSidebarSearch(sidebarSearchQuery) ? 'No document notes match your search.' : 'No document notes yet.'}</p>
         {:else}
-          {#each noteSidebarGroups.documentNotes as note (note.id)}
+          {#each filteredDocumentNotes as note (note.id)}
             <div class="paper-note-item paper-document-note-card">
               <div class="paper-note-loc"><span class="paper-note-label">standalone</span></div>
               <div class="paper-note-body-row">
