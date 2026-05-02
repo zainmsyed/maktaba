@@ -1033,6 +1033,7 @@
   >
     <NoteEditor
       placement="popup"
+      autoFocus={true}
       initialContent={getPrimaryNoteForHighlight(backendHighlight?.id)?.content ?? ''}
       highlight={backendHighlight ?? fallbackHighlight}
       onChange={(value) => { noteDraft = value; }}

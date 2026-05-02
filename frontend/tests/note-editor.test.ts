@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import NoteEditor from '../src/components/NoteEditor.svelte';
 import NotePopupHarness from './mocks/NotePopupHarness.svelte';
+import NotePopupTextareaHarness from './mocks/NotePopupTextareaHarness.svelte';
 import { advanceAndFlush } from './test-helpers';
 
 describe('NoteEditor', () => {
@@ -73,5 +74,14 @@ describe('NotePopup', () => {
     await fireEvent.keyDown(window, { key: 'Tab' });
 
     expect(document.activeElement).toBe(first);
+  });
+
+  it('prefers the note textarea when the popup opens', async () => {
+    vi.useFakeTimers();
+    const { getByRole } = render(NotePopupTextareaHarness);
+
+    await advanceAndFlush(0);
+
+    expect(document.activeElement).toBe(getByRole('textbox', { name: 'Note content' }));
   });
 });

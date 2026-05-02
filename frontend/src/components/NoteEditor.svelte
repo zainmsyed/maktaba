@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy, onMount } from 'svelte';
+  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
 
   export let placement: 'sidebar' | 'popup' = 'sidebar';
   export let initialContent: string = '';
@@ -8,6 +8,7 @@
   export let onChange: ((draft: string) => void) | null = null;
   export let onSave: ((draft: string) => Promise<any>) | null = null;
   export let onClose: (() => void) | null = null;
+  export let autoFocus = false;
 
   const dispatch = createEventDispatcher();
 
@@ -17,16 +18,41 @@
   let autosaveTimer: number | null = null;
   let savedClearTimer: number | null = null;
   let textareaEl: HTMLTextAreaElement | null = null;
+  let focusRetryTimers: number[] = [];
+  let focusRetryFrame: number | null = null;
+
+  function focusTextarea() {
+    textareaEl?.focus({ preventScroll: true });
+    textareaEl?.setSelectionRange?.(textareaEl.value.length, textareaEl.value.length);
+  }
+
+  function queueFocusRetries() {
+    void tick().then(() => {
+      focusTextarea();
+      if (typeof window === 'undefined') return;
+      if (focusRetryFrame !== null) window.cancelAnimationFrame(focusRetryFrame);
+      focusRetryFrame = window.requestAnimationFrame(() => {
+        focusRetryFrame = null;
+        focusTextarea();
+      });
+      for (const delay of [0, 50, 150]) {
+        focusRetryTimers.push(window.setTimeout(focusTextarea, delay));
+      }
+    });
+  }
 
   // expose focus() for tests / callers
   export function focus() {
-    textareaEl?.focus();
-    textareaEl?.setSelectionRange?.(textareaEl.value.length, textareaEl.value.length);
+    focusTextarea();
+    queueFocusRetries();
   }
 
   function clearTimers() {
     if (autosaveTimer !== null) { window.clearTimeout(autosaveTimer); autosaveTimer = null; }
     if (savedClearTimer !== null) { window.clearTimeout(savedClearTimer); savedClearTimer = null; }
+    for (const timer of focusRetryTimers) window.clearTimeout(timer);
+    focusRetryTimers = [];
+    if (focusRetryFrame !== null) { window.cancelAnimationFrame(focusRetryFrame); focusRetryFrame = null; }
   }
 
   function resetStatus() { status = 'idle'; }
@@ -85,6 +111,9 @@
   onMount(() => {
     resetStatus();
     window.addEventListener('keydown', handleKeydown);
+    if (autoFocus || placement === 'popup') {
+      queueFocusRetries();
+    }
   });
 
   onDestroy(() => {
@@ -134,6 +163,7 @@
     class="paper-editor-textarea ne-textarea"
     placeholder={placement === 'popup' ? 'Add a note for this highlight…' : 'Write a note for this document…'}
     aria-label={ariaLabel}
+    data-autofocus={autoFocus || placement === 'popup' ? 'true' : undefined}
     bind:value={draft}
     on:input={handleInput}
   ></textarea>

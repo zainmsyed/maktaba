@@ -57,3 +57,5 @@ frontend/vite.config.ts — Vite configuration for the frontend project
 package-lock.json — package-lock.json configuration file
 package.json — Root package.json
 scripts/run-integration-tests.sh — Helper script to run integration tests (local/docker)
+
+frontend/tests/mocks/NotePopupTextareaHarness.svelte — (undescribed)

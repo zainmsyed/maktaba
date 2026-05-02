@@ -18,8 +18,12 @@
   }
 
   function focusFirst() {
-    const [first] = getFocusableElements();
-    (first ?? popupEl)?.focus?.();
+    const focusable = getFocusableElements();
+    const preferred =
+      focusable.find((el) => el.hasAttribute('data-autofocus')) ??
+      focusable.find((el) => el instanceof HTMLTextAreaElement) ??
+      focusable[0];
+    (preferred ?? popupEl)?.focus?.();
   }
 
   function handleKeydown(event: KeyboardEvent) {
