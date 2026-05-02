@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
+  import { computeProgressPercent } from '../../lib/progress';
 
   export let data: App.PageData;
 
@@ -37,7 +38,6 @@
   }
 
   const BLOCKING_JOB_TYPES = new Set(['extract_text', 'ocr']);
-  const COVER_CLASSES = ['cover-1', 'cover-2', 'cover-3', 'cover-4'];
 
   async function loadDocuments(options: { silent?: boolean } = {}) {
     const { silent = false } = options;
@@ -116,17 +116,9 @@
 
   function readingProgressPercent(entry: DocWithJobs) {
     const total = Number(entry.document?.page_count ?? 0);
-    if (total <= 0) return 0;
-
     const stored = getStoredProgress(entry.document?.id ?? '');
     const reachedPage = Math.max(0, Math.floor(Number(stored.page) || 0));
-
-    // The reader starts on page 1; treat that baseline as 0% until users advance.
-    if (reachedPage <= 1) return 0;
-    if (reachedPage >= total) return 100;
-    if (total === 1) return reachedPage >= 1 ? 100 : 0;
-
-    return Math.round(((reachedPage - 1) / (total - 1)) * 100);
+    return computeProgressPercent(reachedPage, total);
   }
 
   function progressLabel(entry: DocWithJobs) {
@@ -162,16 +154,15 @@
     }
   }
 
-  // derive a sorted array reactively so Svelte change detection is reliable
-  $: sortedDocuments = [...documents].sort((a, b) => {
+  function sortDocuments(a: DocWithJobs, b: DocWithJobs, mode: typeof sortMode): number {
     const ad = a.document || {};
     const bd = b.document || {};
-    if (sortMode === 'title') {
+    if (mode === 'title') {
       const at = (ad.title ?? '').toLowerCase();
       const bt = (bd.title ?? '').toLowerCase();
       return at.localeCompare(bt);
     }
-    if (sortMode === 'date_added') {
+    if (mode === 'date_added') {
       const adt = Date.parse(ad.created_at ?? ad.createdAt ?? '') || 0;
       const bdt = Date.parse(bd.created_at ?? bd.createdAt ?? '') || 0;
       return bdt - adt;
@@ -183,7 +174,10 @@
       ? Date.parse(bd.reading_progress.last_opened)
       : Date.parse(bd.updated_at ?? bd.updatedAt ?? '') || 0;
     return b_last - a_last;
-  });
+  }
+
+  // derive a sorted array reactively so Svelte change detection is reliable
+  $: sortedDocuments = [...documents].sort((a, b) => sortDocuments(a, b, sortMode));
 
   // trigger polling decisions whenever documents change
   $: {
@@ -206,15 +200,48 @@
     input.value = '';
   }
 
-  async function upload(file: File) {
-    const localId = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : Math.random().toString(36).slice(2);
-    const mockDoc = {
-      title: file.name.replace(/\.[^.]+$/, ''),
-      authors: [],
-      format: file.name.split('.').pop(),
-      created_at: new Date().toISOString(),
+  function generateLocalId(): string {
+    return typeof crypto !== 'undefined' && (crypto as any).randomUUID
+      ? (crypto as any).randomUUID()
+      : Math.random().toString(36).slice(2);
+  }
+
+  function buildOptimisticEntry(file: File, localId: string): DocWithJobs {
+    return {
+      document: {
+        title: file.name.replace(/\.[^.]+$/, ''),
+        authors: [],
+        format: file.name.split('.').pop(),
+        created_at: new Date().toISOString(),
+      },
+      jobs: [],
+      localId,
+      uploading: true,
     };
-    documents = [{ document: mockDoc, jobs: [], localId, uploading: true }, ...documents];
+  }
+
+  function mergeUploadResponse(localId: string, payload: any) {
+    const newEntry = { document: payload.document, jobs: payload.jobs };
+    const idx = documents.findIndex((d) => d.localId === localId);
+    if (idx !== -1) {
+      documents = documents.map((d) => (d.localId === localId ? newEntry : d));
+    } else {
+      documents = [newEntry, ...documents];
+    }
+  }
+
+  function markUploadError(localId: string, message: string) {
+    const idx = documents.findIndex((d) => d.localId === localId);
+    if (idx !== -1) {
+      documents = documents.map((d) =>
+        d.localId === localId ? { ...d, uploading: false, error: message } : d,
+      );
+    }
+  }
+
+  async function upload(file: File) {
+    const localId = generateLocalId();
+    documents = [buildOptimisticEntry(file, localId), ...documents];
     try {
       const fd = new FormData();
       fd.append('file', file, file.name);
@@ -226,21 +253,9 @@
       if (!res.ok) {
         throw new Error(payload.detail || payload.error || `HTTP ${res.status}`);
       }
-      const idx = documents.findIndex((d) => d.localId === localId);
-      const newEntry = { document: payload.document, jobs: payload.jobs };
-      if (idx !== -1) {
-        documents = documents.map((d) => (d.localId === localId ? newEntry : d));
-      } else {
-        documents = [newEntry, ...documents];
-      }
+      mergeUploadResponse(localId, payload);
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      const idx = documents.findIndex((d) => d.localId === localId);
-      if (idx !== -1) {
-        documents = documents.map((d) =>
-          d.localId === localId ? { ...d, uploading: false, error: message } : d,
-        );
-      }
+      markUploadError(localId, e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -248,12 +263,7 @@
     if (!doc?.id || (doc.format ?? '').toLowerCase() !== 'pdf') {
       return null;
     }
-
     return `/library/${doc.id}`;
-  }
-
-  function coverClass(index: number) {
-    return COVER_CLASSES[index % COVER_CLASSES.length];
   }
 </script>
 
@@ -313,102 +323,54 @@
         <div class="library-state">No documents yet - upload a PDF or EPUB to get started.</div>
       {:else}
         <div class="books-grid">
-          {#each sortedDocuments as entry, index (entry.document.id ?? entry.localId)}
-            {#if readerHref(entry.document)}
-              <a href={readerHref(entry.document)} class="book-card">
-                <div class="book-card-body">
-                  <div class="book-card-head">
-                    <h2 class="book-card-title">{entry.document.title ?? 'Untitled'}</h2>
-                    {#if statusTone(entry) === 'emerald'}
-                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    {:else if statusTone(entry) === 'amber'}
-                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                    {:else if statusTone(entry) === 'rose'}
-                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    {/if}
-                  </div>
-                  <p class="book-card-author">
-                    {#if entry.document.authors && entry.document.authors.length > 0}
-                      {entry.document.authors.join(', ')}
-                    {:else}
-                      Unknown author
-                    {/if}
-                  </p>
-                  <div class="book-progress-row">
-                    <div class="book-prog-bar">
-                      <div class="book-prog-fill" class:book-prog-fill--complete={progressComplete(entry)} style={`width: ${progressWidth(entry)}%`}></div>
-                    </div>
-                    <span class="book-prog-label">{progressLabel(entry)}</span>
-                  </div>
-                  <div class="book-card-footer">
-                    <span class="book-card-date">{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</span>
-                  </div>
-                  {#if entry.highlight_count || entry.note_count}
-                    <div class="book-card-stats">
-                      {#if entry.highlight_count}
-                        <span class="book-stat" title="{entry.highlight_count} highlights">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/><path d="M15 3h6v6"/></svg>
-                          {entry.highlight_count}
-                        </span>
-                      {/if}
-                      {#if entry.note_count}
-                        <span class="book-stat" title="{entry.note_count} notes">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                          {entry.note_count}
-                        </span>
-                      {/if}
-                    </div>
+          {#each sortedDocuments as entry (entry.document.id ?? entry.localId)}
+            {@const href = readerHref(entry.document)}
+            <svelte:element this={href ? 'a' : 'article'} {href} class="book-card">
+              <div class="book-card-body">
+                <div class="book-card-head">
+                  <h2 class="book-card-title">{entry.document.title ?? 'Untitled'}</h2>
+                  {#if statusTone(entry) === 'emerald'}
+                    <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  {:else if statusTone(entry) === 'amber'}
+                    <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                  {:else if statusTone(entry) === 'rose'}
+                    <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   {/if}
                 </div>
-              </a>
-            {:else}
-              <article class="book-card">
-                <div class="book-card-body">
-                  <div class="book-card-head">
-                    <h2 class="book-card-title">{entry.document.title ?? 'Untitled'}</h2>
-                    {#if statusTone(entry) === 'emerald'}
-                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    {:else if statusTone(entry) === 'amber'}
-                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                    {:else if statusTone(entry) === 'rose'}
-                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    {/if}
-                  </div>
-                  <p class="book-card-author">
-                    {#if entry.document.authors && entry.document.authors.length > 0}
-                      {entry.document.authors.join(', ')}
-                    {:else}
-                      Unknown author
-                    {/if}
-                  </p>
-                  <div class="book-progress-row">
-                    <div class="book-prog-bar">
-                      <div class="book-prog-fill" class:book-prog-fill--complete={progressComplete(entry)} style={`width: ${progressWidth(entry)}%`}></div>
-                    </div>
-                    <span class="book-prog-label">{progressLabel(entry)}</span>
-                  </div>
-                  <div class="book-card-footer">
-                    <span class="book-card-date">{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</span>
-                  </div>
-                  {#if entry.highlight_count || entry.note_count}
-                    <div class="book-card-stats">
-                      {#if entry.highlight_count}
-                        <span class="book-stat" title="{entry.highlight_count} highlights">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/><path d="M15 3h6v6"/></svg>
-                          {entry.highlight_count}
-                        </span>
-                      {/if}
-                      {#if entry.note_count}
-                        <span class="book-stat" title="{entry.note_count} notes">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                          {entry.note_count}
-                        </span>
-                      {/if}
-                    </div>
+                <p class="book-card-author">
+                  {#if entry.document.authors && entry.document.authors.length > 0}
+                    {entry.document.authors.join(', ')}
+                  {:else}
+                    Unknown author
                   {/if}
+                </p>
+                <div class="book-progress-row">
+                  <div class="book-prog-bar">
+                    <div class="book-prog-fill" class:book-prog-fill--complete={progressComplete(entry)} style={`width: ${progressWidth(entry)}%`}></div>
+                  </div>
+                  <span class="book-prog-label">{progressLabel(entry)}</span>
                 </div>
-              </article>
-            {/if}
+                <div class="book-card-footer">
+                  <span class="book-card-date">{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</span>
+                </div>
+                {#if entry.highlight_count || entry.note_count}
+                  <div class="book-card-stats">
+                    {#if entry.highlight_count}
+                      <span class="book-stat" title="{entry.highlight_count} highlights">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/><path d="M15 3h6v6"/></svg>
+                        {entry.highlight_count}
+                      </span>
+                    {/if}
+                    {#if entry.note_count}
+                      <span class="book-stat" title="{entry.note_count} notes">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        {entry.note_count}
+                      </span>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            </svelte:element>
           {/each}
         </div>
       {/if}
@@ -417,15 +379,6 @@
 </main>
 
 <style>
-  :global(html) {
-    min-height: 100%;
-  }
-
-  :global(a) {
-    color: inherit;
-    text-decoration: none;
-  }
-
   .library-page {
     min-height: 100vh;
     padding: 0;

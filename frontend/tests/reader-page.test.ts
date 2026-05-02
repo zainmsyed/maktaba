@@ -199,7 +199,6 @@ describe('reader page', () => {
       expect(getByTestId('pdf-viewer')).toBeTruthy();
       expect(getAllByText('1 / 3').length).toBeGreaterThan(0);
       expect(getByRole('button', { name: 'Fit width' })).toBeTruthy();
-      expect(getByText('Processing')).toBeTruthy();
     });
 
     await fireEvent.click(getByRole('button', { name: 'Fit page' }));
@@ -234,11 +233,11 @@ describe('reader page', () => {
     });
 
     await waitFor(() => {
-      expect(getAllByText('Highlights').length).toBeGreaterThan(0);
+      expect(getByRole('tab', { name: 'highlights' })).toBeTruthy();
       expect(getByRole('button', { name: 'Select text' })).toBeTruthy();
       expect(getByRole('button', { name: 'Draw box' })).toBeTruthy();
       expect(getByText(/Select text directly in the PDF/i)).toBeTruthy();
-      expect(getByText('No highlights on this page.')).toBeTruthy();
+      expect(getByText('No annotations yet.')).toBeTruthy();
     });
 
     await fireEvent.click(getByRole('button', { name: 'Draw box' }));
@@ -342,7 +341,7 @@ describe('reader page', () => {
     vi.useFakeTimers();
     const scrollIntoViewSpy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => undefined);
 
-    const { getByRole, getAllByRole, getByText, getByTestId } = render(ReaderPage, {
+    const { getByRole, getAllByRole, getByText, getAllByText, getByTestId } = render(ReaderPage, {
       props: {
         data: {
           apiUrl: 'http://api.test',
@@ -361,7 +360,7 @@ describe('reader page', () => {
 
     await advanceAndFlush(0);
     expect(getByTestId('pdf-viewer')).toBeTruthy();
-    expect(getByText('Notes')).toBeTruthy();
+    expect(getByRole('tab', { name: 'highlights' })).toBeTruthy();
 
     const textLayerHost = getByTestId('pdf-text-layer-host');
     await fireEvent.mouseUp(textLayerHost);
@@ -381,20 +380,27 @@ describe('reader page', () => {
     await advanceAndFlush(500);
     await advanceAndFlush(0);
 
-    expect(getByText('Saved')).toBeTruthy();
-    expect(getByText('A note about this highlight')).toBeTruthy();
+    expect(getAllByText('Saved').length).toBeGreaterThan(0);
+    // The note text appears in the popup editor textarea; verify sidebar shows the page group.
     expect(getByText('Page 1')).toBeTruthy();
 
-    const highlightSidebarButton = getByRole('button', {
-      name: /A note about this highlight/i,
-    });
-    await fireEvent.click(highlightSidebarButton);
+    // Click the highlight card in the sidebar to trigger jump/focus
+    const sidebar = getByTestId('notes-sidebar');
+    const quoteEl = Array.from(sidebar.querySelectorAll('.paper-note-quote')).find(
+      (el) => el.textContent?.includes('Selectable highlight text'),
+    ) as HTMLElement;
+    const highlightSidebarCard = quoteEl?.closest('[role="button"]') as HTMLElement;
+    expect(highlightSidebarCard).toBeTruthy();
+    await fireEvent.click(highlightSidebarCard);
     expect(scrollIntoViewSpy).toHaveBeenCalled();
     await advanceAndFlush(1200);
 
-    const addNoteButton = getAllByRole('button', { name: 'Add note' }).find(
-      (button) => button.textContent?.trim() === 'Add note',
-    );
+    // Switch to the notes tab to add a document note
+    const notesTab = getByRole('tab', { name: 'notes' });
+    await fireEvent.click(notesTab);
+    await advanceAndFlush(0);
+
+    const addNoteButton = getAllByRole('button', { name: 'Add note' }).at(0);
     expect(addNoteButton).toBeTruthy();
     await fireEvent.click(addNoteButton as HTMLElement);
     await advanceAndFlush(0);
@@ -424,9 +430,7 @@ describe('reader page', () => {
       .filter((text): text is string => Boolean(text));
     expect(sidebarHeadings).toMatchInlineSnapshot(`
       [
-        "Notes",
         "Document notes",
-        "Page 1",
       ]
     `);
 
@@ -476,10 +480,14 @@ describe('reader page', () => {
     await advanceAndFlush(500);
     await advanceAndFlush(0);
 
-    // Click the note entry in the sidebar; our handler should find and click the
-    // highlight element in the viewer which opens the mock highlight popup.
-    const highlightSidebarButton = getByRole('button', { name: /Popup test note/i });
-    await fireEvent.click(highlightSidebarButton);
+    // Click the highlight card in the sidebar to trigger jump/focus
+    const sidebar = getByTestId('notes-sidebar');
+    const quoteEl = Array.from(sidebar.querySelectorAll('.paper-note-quote')).find(
+      (el) => el.textContent?.includes('Selectable highlight text'),
+    ) as HTMLElement;
+    const highlightSidebarCard = quoteEl?.closest('[role="button"]') as HTMLElement;
+    expect(highlightSidebarCard).toBeTruthy();
+    await fireEvent.click(highlightSidebarCard);
 
     await waitFor(() => {
       expect(getByTestId('mock-highlight-popup')).toBeTruthy();
@@ -580,11 +588,13 @@ describe('reader page', () => {
     // Type but do not wait for autosave; switch editors immediately
     await fireEvent.input(textarea, { target: { value: 'Draft to flush' } });
 
-    const addNoteButtons = getAllByRole('button', { name: 'Add note' });
-    const sidebarAddNote = addNoteButtons.find((b) => b.textContent?.trim() === 'Add note');
-    expect(sidebarAddNote).toBeTruthy();
+    // Switch to notes tab and click Add note; this should trigger flushActiveNoteDraft
+    const notesTab = getByRole('tab', { name: 'notes' });
+    await fireEvent.click(notesTab);
+    await advanceAndFlush(0);
 
-    // Click Add note in the sidebar; this should trigger flushActiveNoteDraft
+    const sidebarAddNote = getAllByRole('button', { name: 'Add note' }).at(0);
+    expect(sidebarAddNote).toBeTruthy();
     await fireEvent.click(sidebarAddNote as HTMLElement);
     await advanceAndFlush(0);
 

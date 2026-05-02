@@ -71,7 +71,7 @@ This is a targeted follow-up to Story 008 (notes CRUD + core flow). Keep scope d
   - Add Vitest tests for NoteEditor (autosave indicator, saved state)
   - Add snapshot(s) for editor and sidebar groupings
   - Run full frontend test suite and fix regressions
-- [ ] QA & deliverables
+- [x] QA & deliverables
   - Manual QA on desktop and narrow/mobile widths
   - Add screenshots and notes to the story after verification
 

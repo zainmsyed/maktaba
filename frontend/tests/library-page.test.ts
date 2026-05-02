@@ -222,11 +222,11 @@ describe('library page', () => {
 
     await advanceAndFlush(0);
 
-    expect(getByText('Processing')).toBeTruthy();
+    expect(getByText('Extracting…')).toBeTruthy();
 
     await advanceAndFlush(5000);
 
-    expect(getByText('Ready')).toBeTruthy();
+    expect(getByText('Open to read')).toBeTruthy();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

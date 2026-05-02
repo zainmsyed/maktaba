@@ -68,13 +68,17 @@
 
   async function runSave() {
     if (!onSave) return null;
+    const draftAtSave = draft;
     status = 'saving';
     try {
-      const saved = await onSave(draft);
+      const saved = await onSave(draftAtSave);
       if (!saved) { status = 'error'; dispatch('error', { error: 'save-failed' }); return null; }
-      const newContent = saved?.content ?? (typeof saved === 'string' ? saved : draft);
+      const newContent = saved?.content ?? (typeof saved === 'string' ? saved : draftAtSave);
       savedDraft = newContent;
-      draft = newContent;
+      // Only overwrite draft if the user hasn't typed new content while the save was in flight.
+      if (draft === draftAtSave) {
+        draft = newContent;
+      }
       status = 'saved';
       scheduleSavedNoteFade();
       dispatch('saved', { note: saved });

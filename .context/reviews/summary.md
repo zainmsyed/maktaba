@@ -1,6 +1,6 @@
 # Review Summary
 
-**Last updated:** 2026-05-02T20:00:43Z
+**Last updated:** 2026-05-02T20:31:33Z
 
 ## Findings
 - When adding schema/bootstrap logic, include at least one automated Postgres smoke test for tables, extensions, and indexes. | count: 2 | status: promoted | sources: review-20260424-204758.md, review-20260424-205443.md
@@ -14,16 +14,19 @@
 - Do not run superuser / admin DDL (CREATE EXTENSION, cluster-wide setup) on regular application startup; perform these in a controlled admin/migration step. | count: 1 | status: tracked | sources: review-20260424-205443.md
 - Endpoints that exercise media processing (PDF text extraction, OCR) should have integration tests covering success and common failure modes. | count: 1 | status: tracked | sources: review-20260429-023249.md | stories: story-008
 - Ensure public API endpoints that exercise media processing (PDF text extraction, OCR) have integration tests covering success and common failure modes. | count: 1 | status: tracked | sources: review-20260429-022103.md | stories: story-008
+- Extract reactive `$:` assignment bodies longer than ~10 lines into named functions to keep complexity scores down. | count: 1 | status: tracked | sources: review-20260502-202742.md | stories: story-009
 - Fail closed on upload validation; parser failures should reject the file instead of silently downgrading to filename fallback. | count: 1 | status: tracked | sources: review-20260425-011052.md | stories: story-003
 - If a background job writes child rows, rollback staged inserts before recording failure so partial output never commits. | count: 1 | status: tracked | sources: review-20260425-191437.md | stories: story-006
 - Never delete a canonical storage path during rollback unless the current transaction created that file. | count: 1 | status: tracked | sources: review-20260425-011052.md | stories: story-003
 - New background extraction/OCR flows should have automated coverage for both the happy path and failure rollback. | count: 1 | status: tracked | sources: review-20260425-191437.md | stories: story-006
+- Page components should not introduce `:global()` rules; global resets belong in `app.css`. | count: 1 | status: tracked | sources: review-20260502-202742.md | stories: story-009
 - Prefer single-source-of-truth for autosave and immediate save-status UI: the component owning the input should manage timers and UX, exposing an async save API and high-level events to parents. | count: 1 | status: tracked | sources: review-20260429-022103.md | stories: story-008
 - Prefer single-source-of-truth for autosave and save-status: implement in the component owning the input and expose events/async save API to parents. | count: 1 | status: tracked | sources: review-20260428-210149.md | stories: story-008
 - Prefer single-source-of-truth for input autosave and save-status; the component owning the input should manage timers and UX and expose an async save API/events for parents. | count: 1 | status: tracked | sources: review-20260429-023249.md | stories: story-008
 - Schema/bootstrap stories should include at least one automated database smoke test for required extensions, tables, and critical indexes. | count: 1 | status: tracked | sources: review-20260424-210450.md | stories: story-002
 - When a feature promises “jump back to the source location,” add an integration test against the exact annotation target, not just the page container. | count: 1 | status: tracked | sources: review-20260427-201845.md
 - When a parent row owns child rows, encode the intended `ON DELETE` action in the database foreign key instead of relying on application cleanup. | count: 1 | status: tracked | sources: review-20260424-210450.md | stories: story-002
+- When a rendering/viewer layer (PDF.js, highlight layers) can re-render pages during normal scrolling, also ensure scroll-restoration or programmatic scrolling runs only once after the initial layout settles — avoid re-running restores on each render to prevent layout jumps. | count: 1 | status: promoted | sources: remembered.md | stories: story-009
 - When adding a destructive UI/API path, cover both the happy path and at least one failure path in client and backend tests. | count: 1 | status: tracked | sources: review-20260427-201845.md
 - When adding a new persistence path, add a small route-local client with unit tests for mapping and payload generation. | count: 1 | status: tracked | sources: review-20260427-091600.md | stories: story-007
 - When adding a new service scaffold, include at least one smoke test and CI job to validate build-and-run. | count: 1 | status: tracked | sources: review-20260424-171509.md
@@ -33,8 +36,10 @@
 - When extracting a reusable UI component, remove the parent's legacy handlers/refs unless intentionally kept for a documented fallback. | count: 1 | status: tracked | sources: review-20260429-022103.md | stories: story-008
 - When extracting a UI component, remove parent-side inline handlers/refs unless an explicitly documented fallback is required. | count: 1 | status: tracked | sources: review-20260429-023249.md | stories: story-008
 - When extracting a UI component, remove the parent's legacy handlers and element refs that were used only by the inline implementation. | count: 1 | status: tracked | sources: review-20260428-210149.md | stories: story-008
+- When fixing a calculation bug, add a regression test that would have caught it. | count: 1 | status: tracked | sources: review-20260502-202742.md | stories: story-009
 - When generating lockfiles for containerized builds, generate the lock with the same Python minor version used in the containers (e.g., `uv lock --python X.Y`). | count: 1 | status: tracked | sources: review-20260424-171509.md
 - When ownership semantics exist (parent → child rows), declare the FK delete action at the schema level (ondelete) rather than relying only on application cleanup. | count: 1 | status: tracked | sources: review-20260424-205443.md
+- When progress logic is duplicated across views, extract a single tested helper to prevent drift. | count: 1 | status: tracked | sources: review-20260502-202742.md | stories: story-009
 - When replacing or wrapping a third-party component's UI hooks, update the test mocks to mirror the new prop/behavior and add a small E2E smoke test for the integration. | count: 1 | status: tracked | sources: review-20260427-200715.md | stories: story-008
 - When syncing Python dependencies in a slim Docker image, ensure required OS-level build dependencies are installed or use a base image that provides them. | count: 1 | status: tracked | sources: review-20260424-171509.md
 - When the data model depends on delete cascades, declare the delete policy in the foreign key definition rather than relying on application-side cleanup. | count: 1 | status: tracked | sources: review-20260424-204758.md

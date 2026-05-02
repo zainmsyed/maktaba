@@ -9,6 +9,7 @@
     HighlightsModel,
     type PdfHighlighterUtils,
   } from 'svelte-pdf-highlighter';
+  import { computeProgressPercent } from '../../../lib/progress';
   import {
     backendToLibraryHighlight,
     buildCreatePayload,
@@ -212,7 +213,6 @@
   let noteSavedClearTimer: number | null = null;
   let noteEditorRevision = 0;
   let noteEditorPlacement: 'sidebar' | 'popup' | null = null;
-  let noteTextareaEl: HTMLTextAreaElement | null = null;
   let noteEditorRef: any = null;
 
   async function saveFromEditor(draft: string) {
@@ -251,7 +251,7 @@
     : 'Unknown author';
   $: pageDisplay = totalPages > 0 ? `${currentPage} / ${totalPages}` : '—';
   $: readingProgressLabel = totalPages > 0 ? `p. ${currentPage} of ${totalPages}` : 'p. —';
-  $: readingProgressPercent = totalPages > 0 ? Math.min(100, Math.max(1, Math.round((currentPage / totalPages) * 100))) : 0;
+  $: readingProgressPercent = computeProgressPercent(currentPage, totalPages);
   $: readingProgressComplete = readingProgressPercent >= 100;
   $: zoomDisplay =
     zoomMode === 'fit-width'
@@ -548,9 +548,6 @@
       // focus the extracted NoteEditor component when available
       if (noteEditorRef?.focus) {
         noteEditorRef.focus();
-      } else {
-        noteTextareaEl?.focus();
-        noteTextareaEl?.setSelectionRange?.(noteTextareaEl.value.length, noteTextareaEl.value.length);
       }
     });
   }
