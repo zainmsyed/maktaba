@@ -23,7 +23,6 @@
     type LibraryHighlight,
   } from './highlight-api';
   import NoteEditor from '../../../components/NoteEditor.svelte';
-  import NotePopup from '../../../components/NotePopup.svelte';
 
   export let data: {
     apiUrl: string;
@@ -230,6 +229,7 @@
   let noteEditorRevision = 0;
   let noteEditorPlacement: 'sidebar' | 'popup' | null = null;
   let noteEditorRef: any = null;
+  const popupPinnedSetterByHighlightId = new Map<string, (flag: boolean) => void>();
 
   async function saveFromEditor(draft: string) {
     const target = activeNoteTarget;
@@ -757,9 +757,42 @@
     } catch {}
   }
 
+  function rememberPopupPinnedSetter(highlightId: string, setPinned: (flag: boolean) => void) {
+    if (highlightId) {
+      popupPinnedSetterByHighlightId.set(highlightId, setPinned);
+    }
+    return true;
+  }
+
+  function getPopupPinnedSetter(highlightId: string) {
+    return popupPinnedSetterByHighlightId.get(highlightId);
+  }
+
+  async function savePopupHighlightNote(highlightId: string, draft: string) {
+    const highlight = getHighlightById(highlightId);
+    if (!highlight) return null;
+    const note = getPrimaryNoteForHighlight(highlightId);
+    if (shouldSkipBlankNewNote(note, draft)) return draft;
+
+    try {
+      const savedNote = await saveNoteDraft({ kind: 'highlight', highlight }, note, draft);
+      upsertNote(savedNote);
+      return savedNote;
+    } catch (error) {
+      console.error('[note] Failed to save popup note', error);
+      return null;
+    }
+  }
+
   function openHighlightPopupAfterFocus(highlightId: string, enabled: boolean | undefined) {
     if (!enabled) return;
-    setTimeout(() => void openHighlightNoteEditor(highlightId, undefined, 'popup'), 0);
+    setTimeout(() => {
+      getPopupPinnedSetter(highlightId)?.(true);
+      window.setTimeout(() => {
+        const textarea = document.querySelector<HTMLTextAreaElement>('.hl_tip_container textarea');
+        textarea?.focus({ preventScroll: true });
+      }, 30);
+    }, 0);
   }
 
   async function focusHighlightById(highlightId: string, options: { openPopup?: boolean; scrollIntoView?: boolean } = {}) {
@@ -1317,13 +1350,22 @@
       const container = node.closest<HTMLElement>('.hl_tip_container');
       if (!container) return;
 
-      if (!container.dataset.baseTop) {
-        container.dataset.baseTop = container.style.top || '0px';
-      }
+      const currentTop = Number.parseFloat(container.style.top || '');
+      const adjustedTop = Number.parseFloat(container.dataset.adjustedTop || '');
+      const savedBaseTop = Number.parseFloat(container.dataset.baseTop || '');
 
-      container.style.top = container.dataset.baseTop;
+      if (!Number.isFinite(currentTop) && !Number.isFinite(savedBaseTop)) return;
+
+      let baseTop = savedBaseTop;
+      if (Number.isFinite(currentTop) && (!Number.isFinite(adjustedTop) || Math.abs(currentTop - adjustedTop) > 0.5)) {
+        baseTop = currentTop;
+        container.dataset.baseTop = `${baseTop}`;
+      }
+      if (!Number.isFinite(baseTop)) return;
+
+      container.style.top = `${baseTop}px`;
       const rect = container.getBoundingClientRect();
-      let nextTop = Number.parseFloat(container.dataset.baseTop) || 0;
+      let nextTop = baseTop;
 
       if (rect.bottom > window.innerHeight - safeMargin) {
         nextTop -= rect.bottom - (window.innerHeight - safeMargin);
@@ -1333,6 +1375,7 @@
       }
 
       container.style.top = `${nextTop}px`;
+      container.dataset.adjustedTop = `${nextTop}`;
     };
 
     const schedule = () => window.requestAnimationFrame(update);
@@ -1404,90 +1447,63 @@
 
 
 
-{#snippet highlightPopup(highlight: PopupHighlightLike, setPinned: (flag: boolean) => void)}
+{#snippet inlineHighlightPopup(highlight: PopupHighlightLike, setPinned: ((flag: boolean) => void) | undefined, autoFocus = false)}
   {@const highlightId = highlight.id ?? ''}
+  {@const _remembered = setPinned ? rememberPopupPinnedSetter(highlightId, setPinned) : true}
   {@const backendHighlight = getHighlightById(highlightId)}
-  {@const highlightNote = getPrimaryNoteForHighlight(highlightId)}
   <div class="Highlight__popup hp-popup" use:keepPopupInView>
-    <p class="hp-label">highlight</p>
-    <p class="hp-text">
-      {highlight.comment || highlight.content?.text || highlight.extracted_text || 'No text extracted'}
-    </p>
-    {#if highlightNote}
-      <p class="hp-note-preview">{highlightNote.content || '(empty note)'}</p>
-    {/if}
-    <div class="hp-colors" role="group" aria-label="Highlight colors">
-      {#each HIGHLIGHT_COLOR_OPTIONS as option}
+    <div class="hp-section hp-section--actions">
+      <div class="hp-row">
+        <p class="hp-label">note</p>
         <button
           type="button"
-          class="hp-color-dot {getHighlightColorName(backendHighlight ?? null) === option.name ? 'is-active' : ''}"
-          aria-label={`Set highlight color to ${option.label}`}
-          title={`Set color to ${option.label}`}
-          style={`--hp-color: ${option.hex};`}
-          on:click={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            highlightId && void updateHighlightColor(highlightId, option.name, setPinned);
-          }}
-        ></button>
-      {/each}
+          class="hp-delete-icon"
+          aria-label="Delete highlight"
+          title="Delete highlight"
+          on:click={() => promptDeleteHighlight(highlight)}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+      <div class="hp-note-editor-shell" role="presentation" on:pointerdown={() => setPinned?.(true)}>
+        <NoteEditor
+          placement="popup"
+          {autoFocus}
+          initialContent={getPrimaryNoteForHighlight(highlightId)?.content ?? ''}
+          highlight={backendHighlight ?? null}
+          onSave={(draft) => savePopupHighlightNote(highlightId, draft)}
+          onClose={() => setPinned?.(false)}
+        />
+      </div>
     </div>
-    <div class="hp-actions">
-      <button
-        type="button"
-        class="hp-action-btn"
-        aria-label={highlightNote ? 'Edit note' : 'Add note'}
-        on:click={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          (e.currentTarget as HTMLElement).blur();
-          void openHighlightNoteEditor(highlightId, setPinned, 'popup');
-        }}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
-        {highlightNote ? 'edit note' : 'add note'}
-      </button>
-      <button
-        type="button"
-        class="hp-action-btn hp-action-btn--danger"
-        aria-label="Delete highlight"
-        on:click={() => promptDeleteHighlight(highlight)}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-        delete
-      </button>
+    <div class="hp-divider"></div>
+    <div class="hp-section">
+      <div class="hp-colors" role="group" aria-label="Highlight colors">
+        {#each HIGHLIGHT_COLOR_OPTIONS as option}
+          <button
+            type="button"
+            class="hp-color-dot {getHighlightColorName(backendHighlight ?? null) === option.name ? 'is-active' : ''}"
+            aria-label={`Set highlight color to ${option.label}`}
+            title={`Set color to ${option.label}`}
+            style={`--hp-color: ${option.hex};`}
+            on:click={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              highlightId && void updateHighlightColor(highlightId, option.name, setPinned);
+            }}
+          ></button>
+        {/each}
+      </div>
     </div>
   </div>
 {/snippet}
 
+{#snippet highlightPopup(highlight: PopupHighlightLike, setPinned: (flag: boolean) => void)}
+  {@render inlineHighlightPopup(highlight, setPinned)}
+{/snippet}
+
 {#snippet editHighlightPopup(highlight: PopupHighlightLike)}
-  {@const backendHighlight = getHighlightById(highlight.id ?? '')}
-  {@const fallbackHighlight = {
-    id: highlight.id ?? '',
-    page_number: backendHighlight?.page_number ?? 1,
-    extracted_text:
-      backendHighlight?.extracted_text ??
-      highlight.comment?.trim() ??
-      highlight.content?.text?.trim() ??
-      highlight.extracted_text?.trim() ??
-      '',
-  } as BackendHighlight}
-  <NotePopup
-    ariaLabel={getPrimaryNoteForHighlight(backendHighlight?.id ?? '') ? 'Edit highlight note' : 'Add highlight note'}
-    title="highlight note"
-    onClose={() => closeNoteEditor()}
-  >
-    <NoteEditor
-      placement="popup"
-      autoFocus={true}
-      initialContent={getPrimaryNoteForHighlight(backendHighlight?.id)?.content ?? ''}
-      highlight={backendHighlight ?? fallbackHighlight}
-      onChange={(value) => { noteDraft = value; }}
-      onSave={saveFromEditor}
-      onClose={() => closeNoteEditor()}
-      bind:this={noteEditorRef}
-    />
-  </NotePopup>
+  {@render inlineHighlightPopup(highlight, getPopupPinnedSetter(highlight.id ?? ''), true)}
 {/snippet}
 
 <svelte:head>
@@ -1766,10 +1782,11 @@
     }
 
     /* ── Highlight popup ──────────────────────── */
-    .hp-popup {
+    .Highlight__popup.hp-popup {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      align-items: stretch !important;
+      gap: 12px;
       min-width: 320px;
       max-width: 440px;
       background: var(--panel-bg-strong) !important;
@@ -1778,39 +1795,62 @@
       border: 0.5px solid var(--rule) !important;
       border-radius: 10px;
       box-shadow: var(--shadow-strong) !important;
-      padding: 14px 16px;
+      padding: 16px 22px !important;
+      overflow-x: hidden;
+    }
+    .hp-section {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      width: 100%;
+    }
+    .hp-section--actions { gap: 10px; }
+    .hp-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .hp-delete-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      background: transparent;
+      border: none;
+      color: #be123c;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.12s, color 0.12s;
+    }
+    .hp-delete-icon:hover { background: rgba(244,63,94,.12); color: #991b1b; }
+    .hp-divider {
+      height: 1px;
+      background: var(--rule);
+      margin: 0;
     }
     .hp-label {
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 300;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--ink-3);
-      margin: 0 0 6px;
+      margin: 0;
     }
-    .hp-text {
-      font-family: var(--font-serif);
-      font-size: 14px;
-      line-height: 1.6;
-      color: var(--ink);
-      margin: 0 0 8px;
-    }
-    .hp-note-preview {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      font-weight: 300;
-      color: var(--ink-2);
-      border-left: 1.5px solid var(--accent-soft);
-      padding-left: 8px;
-      margin: 0 0 8px;
-      line-height: 1.55;
+    .hp-note-editor-shell {
+      width: 100%;
     }
     .hp-colors {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 8px;
-      margin: 0 0 2px;
+      margin: 0;
+      width: 100%;
     }
     .hp-color-dot {
       width: 16px;
@@ -1829,9 +1869,19 @@
       border-color: rgba(26,24,20,0.7);
       box-shadow: 0 0 0 1px rgba(26,24,20,0.3);
     }
-    .hp-actions {
-      display: flex;
-      gap: 8px;
+    .hp-note-preview {
+      align-self: stretch;
+      font-family: var(--font-serif);
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--ink-2);
+      text-align: left;
+      border-left: 1.5px solid var(--accent-soft);
+      padding-left: 10px;
+      margin: 0;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
     .hp-action-btn {
       display: inline-flex;
