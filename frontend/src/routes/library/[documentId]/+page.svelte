@@ -2570,7 +2570,7 @@
       <div class="tb-nav" aria-label="Reading position">
         <button class="tb-nav-btn" type="button" disabled={currentPage <= 1} on:click={goToPreviousPage} aria-label="Previous page">‹</button>
         <span class="tb-label tb-nav-page">
-          <span class="tb-nav-prefix">p.</span>
+
           <input
             class="tb-page-input"
             type="text"
