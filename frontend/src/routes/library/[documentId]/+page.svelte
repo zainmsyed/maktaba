@@ -1381,12 +1381,25 @@
     const progressSaveInterval = window.setInterval(saveProgress, 5000);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
+    function handleDocumentClick(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const openMenus = document.querySelectorAll<HTMLDetailsElement>('details.tb-menu[open]');
+      for (const menu of openMenus) {
+        if (!menu.contains(target)) {
+          menu.open = false;
+        }
+      }
+    }
+    document.addEventListener('click', handleDocumentClick, true);
+
     return () => {
       unsubscribeHighlightsStore?.();
       disconnectPdfScroller();
       clearNoteTimers();
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.clearInterval(progressSaveInterval);
+      document.removeEventListener('click', handleDocumentClick, true);
       if (typeof window !== 'undefined') {
         if (scrollFrame !== null) {
           window.cancelAnimationFrame(scrollFrame);
