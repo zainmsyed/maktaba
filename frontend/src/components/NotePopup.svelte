@@ -16,13 +16,22 @@
     if (!container) return;
 
     const safeMargin = 12;
-    if (!container.dataset.baseTop) {
-      container.dataset.baseTop = container.style.top || '0px';
-    }
+    const currentTop = Number.parseFloat(container.style.top || '');
+    const adjustedTop = Number.parseFloat(container.dataset.adjustedTop || '');
+    const savedBaseTop = Number.parseFloat(container.dataset.baseTop || '');
 
-    container.style.top = container.dataset.baseTop;
+    if (!Number.isFinite(currentTop) && !Number.isFinite(savedBaseTop)) return;
+
+    let baseTop = savedBaseTop;
+    if (Number.isFinite(currentTop) && (!Number.isFinite(adjustedTop) || Math.abs(currentTop - adjustedTop) > 0.5)) {
+      baseTop = currentTop;
+      container.dataset.baseTop = `${baseTop}`;
+    }
+    if (!Number.isFinite(baseTop)) return;
+
+    container.style.top = `${baseTop}px`;
     const rect = container.getBoundingClientRect();
-    let nextTop = Number.parseFloat(container.dataset.baseTop) || 0;
+    let nextTop = baseTop;
 
     if (rect.bottom > window.innerHeight - safeMargin) {
       nextTop -= rect.bottom - (window.innerHeight - safeMargin);
@@ -32,6 +41,7 @@
     }
 
     container.style.top = `${nextTop}px`;
+    container.dataset.adjustedTop = `${nextTop}`;
   }
 
   function getFocusableElements() {
@@ -114,15 +124,15 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    min-width: 360px;
-    max-width: 520px;
+    min-width: 320px;
+    max-width: 440px;
     background: var(--panel-bg-strong) !important;
     background-color: var(--panel-bg-strong) !important;
     color: var(--ink) !important;
     border: 0.5px solid var(--rule) !important;
     border-radius: 10px;
     box-shadow: 0 8px 28px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.07);
-    padding: 14px 16px 16px;
+    padding: 12px 16px 14px;
     outline: none;
   }
 
