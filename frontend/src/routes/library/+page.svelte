@@ -428,7 +428,7 @@
                   <span class="search-result-type">{result.source_type}</span>
                   <span class="search-result-title">{result.document_title ?? 'Untitled'}</span>
                   {#if result.page_number}
-                    <span class="search-result-page">p. {result.page_number}</span>
+                    <span class="search-result-page">{result.page_number}</span>
                   {/if}
                   <p class="search-result-snippet">{result.content}</p>
                 </button>

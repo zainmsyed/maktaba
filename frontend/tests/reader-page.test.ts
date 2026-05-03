@@ -770,4 +770,98 @@ describe('reader page', () => {
     // 'Saved' should no longer be present.
     expect(queryByText('Saved')).toBeNull();
   });
+
+  it('jumps to a page via the numeric input and clamps out-of-range values', async () => {
+    const { getByRole, getAllByText } = render(ReaderPage, {
+      props: {
+        data: {
+          apiUrl: 'http://api.test',
+          fileUrl: 'http://api.test/api/documents/doc-1/file',
+          document: {
+            id: 'doc-1',
+            title: 'Page Jump Test',
+            authors: ['Ada Lovelace'],
+            format: 'pdf',
+            page_count: 3,
+          },
+          jobs: [],
+        },
+      },
+    });
+
+    const pageInput = await waitFor(() =>
+      getByRole('textbox', { name: 'Go to page' }) as HTMLInputElement,
+    );
+    expect(pageInput).toBeTruthy();
+    await waitFor(() => {
+      expect(getAllByText('1 / 3').length).toBeGreaterThan(0);
+    });
+
+    // Jump to page 2 via Enter
+    await fireEvent.input(pageInput, { target: { value: '2' } });
+    await fireEvent.keyDown(pageInput, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(getAllByText('2 / 3').length).toBeGreaterThan(0);
+    });
+
+    // Try an out-of-range value (should clamp to 3)
+    await fireEvent.input(pageInput, { target: { value: '99' } });
+    await fireEvent.keyDown(pageInput, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(getAllByText('3 / 3').length).toBeGreaterThan(0);
+    });
+
+    // Escape should reset the draft to current page
+    await fireEvent.input(pageInput, { target: { value: '2' } });
+    await fireEvent.keyDown(pageInput, { key: 'Escape' });
+    expect(pageInput.value).toBe('3');
+  });
+
+  it('jumps by clicking the reading-progress track', async () => {
+    const { getByRole, getAllByText } = render(ReaderPage, {
+      props: {
+        data: {
+          apiUrl: 'http://api.test',
+          fileUrl: 'http://api.test/api/documents/doc-1/file',
+          document: {
+            id: 'doc-1',
+            title: 'Progress Click Test',
+            authors: ['Ada Lovelace'],
+            format: 'pdf',
+            page_count: 3,
+          },
+          jobs: [],
+        },
+      },
+    });
+
+    const progressButton = await waitFor(() =>
+      getByRole('button', { name: 'Jump by reading progress' }) as HTMLButtonElement,
+    );
+    expect(progressButton).toBeTruthy();
+
+    // Mock the button's bounding rect so a click at clientX=50 with width=100 = 50% = page 2
+    const originalGetBoundingClientRect = progressButton.getBoundingClientRect;
+    progressButton.getBoundingClientRect = vi.fn(() => ({
+      left: 0,
+      top: 0,
+      right: 100,
+      bottom: 20,
+      width: 100,
+      height: 20,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    })) as unknown as typeof originalGetBoundingClientRect;
+
+    await fireEvent.click(progressButton, { clientX: 50 });
+
+    await waitFor(() => {
+      expect(getAllByText('2 / 3').length).toBeGreaterThan(0);
+    });
+
+    progressButton.getBoundingClientRect = originalGetBoundingClientRect;
+  });
 });

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
+  import { keepPopupInView } from '$lib/popup-viewport-guard';
 
   export let ariaLabel = 'Note popup';
   export let title: string = 'highlight';
@@ -7,42 +8,7 @@
 
   let popupEl: HTMLDivElement | null = null;
   let keydownHandler: ((event: KeyboardEvent) => void) | null = null;
-  let resizeObserver: ResizeObserver | null = null;
-  let repositionTimers: number[] = [];
-
-  function keepPopupInView() {
-    if (!popupEl || typeof window === 'undefined') return;
-    const container = popupEl.closest<HTMLElement>('.hl_tip_container');
-    if (!container) return;
-
-    const safeMargin = 12;
-    const currentTop = Number.parseFloat(container.style.top || '');
-    const adjustedTop = Number.parseFloat(container.dataset.adjustedTop || '');
-    const savedBaseTop = Number.parseFloat(container.dataset.baseTop || '');
-
-    if (!Number.isFinite(currentTop) && !Number.isFinite(savedBaseTop)) return;
-
-    let baseTop = savedBaseTop;
-    if (Number.isFinite(currentTop) && (!Number.isFinite(adjustedTop) || Math.abs(currentTop - adjustedTop) > 0.5)) {
-      baseTop = currentTop;
-      container.dataset.baseTop = `${baseTop}`;
-    }
-    if (!Number.isFinite(baseTop)) return;
-
-    container.style.top = `${baseTop}px`;
-    const rect = container.getBoundingClientRect();
-    let nextTop = baseTop;
-
-    if (rect.bottom > window.innerHeight - safeMargin) {
-      nextTop -= rect.bottom - (window.innerHeight - safeMargin);
-    }
-    if (rect.top < safeMargin) {
-      nextTop += safeMargin - rect.top;
-    }
-
-    container.style.top = `${nextTop}px`;
-    container.dataset.adjustedTop = `${nextTop}`;
-  }
+  let popupCleanup: (() => void) | undefined;
 
   function getFocusableElements() {
     if (!popupEl) return [] as HTMLElement[];
@@ -77,26 +43,15 @@
   onMount(() => {
     void tick().then(() => {
       focusFirst();
-      keepPopupInView();
+      if (popupEl) popupCleanup = keepPopupInView(popupEl);
     });
     keydownHandler = handleKeydown;
     window.addEventListener('keydown', keydownHandler, true);
-    window.addEventListener('resize', keepPopupInView);
-    window.addEventListener('scroll', keepPopupInView, true);
-
-    repositionTimers = [0, 30, 120].map((delay) => window.setTimeout(keepPopupInView, delay));
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(() => keepPopupInView());
-      if (popupEl) resizeObserver.observe(popupEl);
-    }
   });
 
   onDestroy(() => {
     if (keydownHandler) window.removeEventListener('keydown', keydownHandler, true);
-    window.removeEventListener('resize', keepPopupInView);
-    window.removeEventListener('scroll', keepPopupInView, true);
-    resizeObserver?.disconnect();
-    for (const timer of repositionTimers) window.clearTimeout(timer);
+    popupCleanup?.();
   });
 </script>
 

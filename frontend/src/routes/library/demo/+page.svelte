@@ -4,31 +4,31 @@
   onMount(() => {
     const notesData: any = {
       n1: {
-        loc: 'p. 47 · ch. 3',
+        loc: '47 · ch. 3',
         quote: '"System 1 operates automatically and quickly, with little or no effort..."',
         body: "Core tension of the book. System 1 is what creates heuristic errors — fast and confident. Connects to Taleb's narrative fallacy: we construct explanations automatically without noticing.",
         color: 'y'
       },
       n2: {
-        loc: 'p. 47 · ch. 3',
+        loc: '47 · ch. 3',
         quote: '"When we think of ourselves, we identify with System 2..."',
         body: "The illusion of rational agency. We think we are the deliberate thinker but most decisions are already made. Compare to Haidt's rider and elephant.",
         color: 'g'
       },
       n3: {
-        loc: 'p. 48 · ch. 3',
+        loc: '48 · ch. 3',
         quote: '"There is no part of the brain that either of these systems would call home."',
         body: "Important caveat — System 1/2 is a useful fiction, not neuroscience. The model describes behaviour not anatomy. Be careful citing this as literal brain science.",
         color: 'b'
       },
       n4: {
-        loc: 'p. 31 · ch. 2',
+        loc: '31 · ch. 2',
         quote: '"The bat and ball problem..."',
         body: "Classic System 1 override. I got this wrong on first read too. The correct answer feels wrong even after you know it.",
         color: 'y'
       },
       n5: {
-        loc: 'p. 22 · ch. 1',
+        loc: '22 · ch. 1',
         quote: '"A general law of least effort..."',
         body: "Cognitive ease as a default. Question this: is laziness really a law or just a tendency? Feels like it elides counterexamples from sports, craft, creativity.",
         color: 'r'
@@ -237,7 +237,7 @@ body { margin: 0; }
     </div>
     <div class="topbar-right" id="reader-controls">
       <div class="progress-wrap">
-        <span class="progress-label">p. 47 of 138</span>
+        <span class="progress-label">47 of 138</span>
         <div class="progress-bar"><div class="progress-fill"></div></div>
         <span class="progress-label">34%</span>
       </div>
@@ -284,19 +284,19 @@ body { margin: 0; }
       <div class="notes-list" id="notes-list">
 
         <div class="note-item active" id="n1" data-color="y">
-          <div class="note-loc"><span class="color-dot dot-y"></span>p. 47 · ch. 3</div>
+          <div class="note-loc"><span class="color-dot dot-y"></span>47 · ch. 3</div>
           <div class="note-quote">"System 1 operates automatically and quickly, with little or no effort..."</div>
           <div class="note-body">Core tension of the book. System 1 is what creates heuristic errors — fast and confident. Connects to Taleb's narrative fallacy: we construct explanations automatically without noticing.</div>
         </div>
 
         <div class="note-item" id="n2" data-color="g">
-          <div class="note-loc"><span class="color-dot dot-g"></span>p. 47 · ch. 3</div>
+          <div class="note-loc"><span class="color-dot dot-g"></span>47 · ch. 3</div>
           <div class="note-quote">"When we think of ourselves, we identify with System 2..."</div>
           <div class="note-body">The illusion of rational agency. We think we are the deliberate thinker but most decisions are already made. Compare to Haidt's rider and elephant.</div>
         </div>
 
         <div class="note-item" id="n3" data-color="b">
-          <div class="note-loc"><span class="color-dot dot-b"></span>p. 48 · ch. 3</div>
+          <div class="note-loc"><span class="color-dot dot-b"></span>48 · ch. 3</div>
           <div class="note-quote">"There is no part of the brain that either of these systems would call home."</div>
           <div class="note-body">Important caveat — System 1/2 is a useful fiction, not neuroscience. The model describes behaviour not anatomy. Be careful citing this as literal brain science.</div>
         </div>
@@ -304,7 +304,7 @@ body { margin: 0; }
       </div>
 
       <div class="note-editor" id="editor">
-        <div class="editor-label" id="editor-label">note — p. 47</div>
+        <div class="editor-label" id="editor-label">note — 47</div>
         <div class="editor-quote" id="editor-quote">"System 1 operates automatically and quickly, with little or no effort..."</div>
         <textarea class="note-textarea" id="note-textarea" placeholder="write a note..."></textarea>
         <div class="editor-footer">

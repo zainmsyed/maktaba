@@ -23,6 +23,7 @@
     type LibraryHighlight,
   } from './highlight-api';
   import NoteEditor from '../../../components/NoteEditor.svelte';
+  import { popupViewportGuard } from '$lib/popup-viewport-guard';
 
   export let data: {
     apiUrl: string;
@@ -1343,62 +1344,6 @@
     scrollToPage(Math.min(totalPages, Math.max(1, Math.floor(ratio * totalPages) + 1)));
   }
 
-  function keepPopupInView(node: HTMLElement) {
-    const safeMargin = 12;
-    let resizeObserver: ResizeObserver | null = null;
-
-    const update = () => {
-      const container = node.closest<HTMLElement>('.hl_tip_container');
-      if (!container) return;
-
-      const currentTop = Number.parseFloat(container.style.top || '');
-      const adjustedTop = Number.parseFloat(container.dataset.adjustedTop || '');
-      const savedBaseTop = Number.parseFloat(container.dataset.baseTop || '');
-
-      if (!Number.isFinite(currentTop) && !Number.isFinite(savedBaseTop)) return;
-
-      let baseTop = savedBaseTop;
-      if (Number.isFinite(currentTop) && (!Number.isFinite(adjustedTop) || Math.abs(currentTop - adjustedTop) > 0.5)) {
-        baseTop = currentTop;
-        container.dataset.baseTop = `${baseTop}`;
-      }
-      if (!Number.isFinite(baseTop)) return;
-
-      container.style.top = `${baseTop}px`;
-      const rect = container.getBoundingClientRect();
-      let nextTop = baseTop;
-
-      if (rect.bottom > window.innerHeight - safeMargin) {
-        nextTop -= rect.bottom - (window.innerHeight - safeMargin);
-      }
-      if (rect.top < safeMargin) {
-        nextTop += safeMargin - rect.top;
-      }
-
-      container.style.top = `${nextTop}px`;
-      container.dataset.adjustedTop = `${nextTop}`;
-    };
-
-    const schedule = () => window.requestAnimationFrame(update);
-    const timers = [0, 30, 120].map((delay) => window.setTimeout(schedule, delay));
-
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(schedule);
-      resizeObserver.observe(node);
-    }
-    window.addEventListener('resize', schedule);
-    window.addEventListener('scroll', schedule, true);
-
-    return {
-      destroy() {
-        resizeObserver?.disconnect();
-        for (const timer of timers) window.clearTimeout(timer);
-        window.removeEventListener('resize', schedule);
-        window.removeEventListener('scroll', schedule, true);
-      },
-    };
-  }
-
   onMount(() => {
     if (typeof window !== 'undefined') {
       window.scrollTo(0, 0);
@@ -1452,7 +1397,7 @@
   {@const highlightId = highlight.id ?? ''}
   {@const _remembered = setPinned ? rememberPopupPinnedSetter(highlightId, setPinned) : true}
   {@const backendHighlight = getHighlightById(highlightId)}
-  <div class="Highlight__popup hp-popup" use:keepPopupInView>
+  <div class="Highlight__popup hp-popup" use:popupViewportGuard>
     <div class="hp-section hp-section--actions">
       <div class="hp-row">
         <span class="hp-label-group">
@@ -1744,7 +1689,6 @@
       padding: 3px 9px;
       font-size: 11px;
     }
-    .tb-nav-prefix,
     .tb-nav-percent { color: var(--ink-3); }
     .tb-nav-progress { margin-left: 2px; }
 
