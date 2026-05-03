@@ -232,6 +232,7 @@
   let noteEditorRef: any = null;
   let popupNoteStatus: 'idle' | 'saving' | 'saved' | 'error' = 'idle';
   const popupPinnedSetterByHighlightId = new Map<string, (flag: boolean) => void>();
+  const backendHighlightIdByStoreId = new Map<string, string>();
 
   async function saveFromEditor(draft: string) {
     const target = activeNoteTarget;
@@ -448,9 +449,16 @@
     return records.filter((note) => matchesSidebarSearch(query, note.content));
   }
 
+  function resolveBackendHighlightId(highlightId: string | undefined | null) {
+    if (!highlightId) return '';
+    if (highlights.some((highlight) => highlight.id === highlightId)) return highlightId;
+    return backendHighlightIdByStoreId.get(highlightId) ?? highlightId;
+  }
+
   function getHighlightById(highlightId: string | undefined | null) {
-    if (!highlightId) return null;
-    return highlights.find((highlight) => highlight.id === highlightId) ?? null;
+    const resolvedHighlightId = resolveBackendHighlightId(highlightId);
+    if (!resolvedHighlightId) return null;
+    return highlights.find((highlight) => highlight.id === resolvedHighlightId) ?? null;
   }
 
   function isActiveHighlightEditor(highlightId: string) {
@@ -771,9 +779,10 @@
   }
 
   async function savePopupHighlightNote(highlightId: string, draft: string) {
-    const highlight = getHighlightById(highlightId);
+    const backendHighlightId = resolveBackendHighlightId(highlightId);
+    const highlight = getHighlightById(backendHighlightId);
     if (!highlight) return null;
-    const note = getPrimaryNoteForHighlight(highlightId);
+    const note = getPrimaryNoteForHighlight(backendHighlightId);
     if (shouldSkipBlankNewNote(note, draft)) return draft;
 
     try {
@@ -1002,6 +1011,7 @@
       const mergedCreatedHighlight = mergeCachedHighlightLocator(createdHighlight);
       highlights = [...highlights, mergedCreatedHighlight];
       if (highlightId) {
+        backendHighlightIdByStoreId.set(highlightId, createdHighlight.id);
         highlightsStore.editHighlight(highlightId, {
           id: createdHighlight.id,
           color_index: colorIndexFromName(createdHighlight.color),
@@ -1023,13 +1033,14 @@
   }
 
   async function updateHighlightColor(highlightId: string, color: BackendHighlightColor, setPinned?: (flag: boolean) => void) {
+    const backendHighlightId = resolveBackendHighlightId(highlightId);
     const colorIndex = colorIndexFromName(color);
     setSelectedHighlightColor(colorIndex);
 
     try {
-      const updatedHighlight = mergeCachedHighlightLocator(await highlightClient.updateHighlight(highlightId, { color }));
+      const updatedHighlight = mergeCachedHighlightLocator(await highlightClient.updateHighlight(backendHighlightId, { color }));
       highlights = highlights.map((highlight) =>
-        highlight.id === highlightId ? updatedHighlight : highlight,
+        highlight.id === backendHighlightId ? updatedHighlight : highlight,
       );
       highlightsStore.editHighlight(highlightId, {
         color_index: colorIndexFromName(updatedHighlight.color),
@@ -1394,7 +1405,8 @@
 
 
 {#snippet inlineHighlightPopup(highlight: PopupHighlightLike, setPinned: ((flag: boolean) => void) | undefined, autoFocus = false)}
-  {@const highlightId = highlight.id ?? ''}
+  {@const storeHighlightId = highlight.id ?? ''}
+  {@const highlightId = resolveBackendHighlightId(storeHighlightId)}
   {@const _remembered = setPinned ? rememberPopupPinnedSetter(highlightId, setPinned) : true}
   {@const backendHighlight = getHighlightById(highlightId)}
   <div class="Highlight__popup hp-popup" use:popupViewportGuard>
@@ -1445,7 +1457,7 @@
             on:click={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              highlightId && void updateHighlightColor(highlightId, option.name, setPinned);
+              storeHighlightId && void updateHighlightColor(storeHighlightId, option.name, setPinned);
             }}
           ></button>
         {/each}
