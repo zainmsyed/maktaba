@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+import logging
 import os
 from typing import AsyncIterator, Literal
 from datetime import datetime, timezone
@@ -18,6 +19,8 @@ from pydantic import BaseModel
 from app.db import get_session, initialize_database
 from app.uploads import create_document_upload
 from app.models import Document, Job, Page, Highlight, Note, Embedding
+
+logger = logging.getLogger("maktaba.api")
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data")).resolve()
 CORS_ORIGINS = [
@@ -121,8 +124,33 @@ def stream_document_file(
             detail="Only PDF documents can be streamed from this endpoint.",
         )
 
-    file_path = Path(document.file_path)
-    if not file_path.is_file():
+    # Try the stored path first (usually absolute inside the container),
+    # then fall back to resolving under DATA_DIR for local dev setups
+    # where the backend runs outside Docker.
+    stored_path = Path(document.file_path)
+    candidates = [stored_path]
+    if stored_path.is_absolute():
+        # e.g. /data/pdfs/abc.pdf → resolve under DATA_DIR/pdfs/abc.pdf
+        relative = stored_path.relative_to(stored_path.anchor) if stored_path.anchor else stored_path
+        candidates.append(DATA_DIR / relative)
+    else:
+        candidates.append(DATA_DIR / stored_path)
+
+    file_path: Path | None = None
+    for candidate in candidates:
+        logger.info("Checking file path candidate: %s (exists=%s)", candidate, candidate.is_file())
+        if candidate.is_file():
+            file_path = candidate
+            break
+
+    if file_path is None:
+        logger.error(
+            "Document %s file not found. Stored path: %s. DATA_DIR: %s. Checked: %s",
+            document_id,
+            document.file_path,
+            DATA_DIR,
+            [str(c) for c in candidates],
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document file not found.",
