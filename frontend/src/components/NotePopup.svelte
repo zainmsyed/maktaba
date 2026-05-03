@@ -7,6 +7,32 @@
 
   let popupEl: HTMLDivElement | null = null;
   let keydownHandler: ((event: KeyboardEvent) => void) | null = null;
+  let resizeObserver: ResizeObserver | null = null;
+  let repositionTimers: number[] = [];
+
+  function keepPopupInView() {
+    if (!popupEl || typeof window === 'undefined') return;
+    const container = popupEl.closest<HTMLElement>('.hl_tip_container');
+    if (!container) return;
+
+    const safeMargin = 12;
+    if (!container.dataset.baseTop) {
+      container.dataset.baseTop = container.style.top || '0px';
+    }
+
+    container.style.top = container.dataset.baseTop;
+    const rect = container.getBoundingClientRect();
+    let nextTop = Number.parseFloat(container.dataset.baseTop) || 0;
+
+    if (rect.bottom > window.innerHeight - safeMargin) {
+      nextTop -= rect.bottom - (window.innerHeight - safeMargin);
+    }
+    if (rect.top < safeMargin) {
+      nextTop += safeMargin - rect.top;
+    }
+
+    container.style.top = `${nextTop}px`;
+  }
 
   function getFocusableElements() {
     if (!popupEl) return [] as HTMLElement[];
@@ -39,13 +65,28 @@
   }
 
   onMount(() => {
-    void tick().then(focusFirst);
+    void tick().then(() => {
+      focusFirst();
+      keepPopupInView();
+    });
     keydownHandler = handleKeydown;
     window.addEventListener('keydown', keydownHandler, true);
+    window.addEventListener('resize', keepPopupInView);
+    window.addEventListener('scroll', keepPopupInView, true);
+
+    repositionTimers = [0, 30, 120].map((delay) => window.setTimeout(keepPopupInView, delay));
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => keepPopupInView());
+      if (popupEl) resizeObserver.observe(popupEl);
+    }
   });
 
   onDestroy(() => {
     if (keydownHandler) window.removeEventListener('keydown', keydownHandler, true);
+    window.removeEventListener('resize', keepPopupInView);
+    window.removeEventListener('scroll', keepPopupInView, true);
+    resizeObserver?.disconnect();
+    for (const timer of repositionTimers) window.clearTimeout(timer);
   });
 </script>
 
@@ -73,8 +114,8 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    min-width: 280px;
-    max-width: 340px;
+    min-width: 360px;
+    max-width: 520px;
     background: var(--panel-bg-strong) !important;
     background-color: var(--panel-bg-strong) !important;
     color: var(--ink) !important;

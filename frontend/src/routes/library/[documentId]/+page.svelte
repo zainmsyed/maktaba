@@ -1309,6 +1309,52 @@
     scrollToPage(Math.min(totalPages, Math.max(1, Math.floor(ratio * totalPages) + 1)));
   }
 
+  function keepPopupInView(node: HTMLElement) {
+    const safeMargin = 12;
+    let resizeObserver: ResizeObserver | null = null;
+
+    const update = () => {
+      const container = node.closest<HTMLElement>('.hl_tip_container');
+      if (!container) return;
+
+      if (!container.dataset.baseTop) {
+        container.dataset.baseTop = container.style.top || '0px';
+      }
+
+      container.style.top = container.dataset.baseTop;
+      const rect = container.getBoundingClientRect();
+      let nextTop = Number.parseFloat(container.dataset.baseTop) || 0;
+
+      if (rect.bottom > window.innerHeight - safeMargin) {
+        nextTop -= rect.bottom - (window.innerHeight - safeMargin);
+      }
+      if (rect.top < safeMargin) {
+        nextTop += safeMargin - rect.top;
+      }
+
+      container.style.top = `${nextTop}px`;
+    };
+
+    const schedule = () => window.requestAnimationFrame(update);
+    const timers = [0, 30, 120].map((delay) => window.setTimeout(schedule, delay));
+
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(schedule);
+      resizeObserver.observe(node);
+    }
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, true);
+
+    return {
+      destroy() {
+        resizeObserver?.disconnect();
+        for (const timer of timers) window.clearTimeout(timer);
+        window.removeEventListener('resize', schedule);
+        window.removeEventListener('scroll', schedule, true);
+      },
+    };
+  }
+
   onMount(() => {
     if (typeof window !== 'undefined') {
       window.scrollTo(0, 0);
@@ -1362,7 +1408,7 @@
   {@const highlightId = highlight.id ?? ''}
   {@const backendHighlight = getHighlightById(highlightId)}
   {@const highlightNote = getPrimaryNoteForHighlight(highlightId)}
-  <div class="Highlight__popup hp-popup">
+  <div class="Highlight__popup hp-popup" use:keepPopupInView>
     <p class="hp-label">highlight</p>
     <p class="hp-text">
       {highlight.comment || highlight.content?.text || highlight.extracted_text || 'No text extracted'}
@@ -1724,8 +1770,8 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      min-width: 240px;
-      max-width: 320px;
+      min-width: 320px;
+      max-width: 440px;
       background: var(--panel-bg-strong) !important;
       background-color: var(--panel-bg-strong) !important;
       color: var(--ink) !important;
