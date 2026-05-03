@@ -75,8 +75,10 @@
     gap: 10px;
     min-width: 280px;
     max-width: 340px;
-    background: var(--paper);
-    border: 0.5px solid rgba(26,24,20,0.14);
+    background: var(--panel-bg-strong) !important;
+    background-color: var(--panel-bg-strong) !important;
+    color: var(--ink) !important;
+    border: 0.5px solid var(--rule) !important;
     border-radius: 10px;
     box-shadow: 0 8px 28px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.07);
     padding: 14px 16px 16px;

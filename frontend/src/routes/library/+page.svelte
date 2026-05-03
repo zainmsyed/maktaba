@@ -438,35 +438,32 @@
         {/if}
       </div>
 
-      <div class="topbar-right">
-        <label class="upload-btn paper-btn-accent">
-          <input type="file" accept=".pdf,.epub" class="sr-only" on:change={onFileChange} />
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="17 8 12 3 7 8"></polyline>
-            <line x1="12" x2="12" y1="3" y2="15"></line>
-          </svg>
-          Upload
-        </label>
-
-        <div class="sort-control">
-          <label for="library-sort" class="sort-label">Sort</label>
-          <select id="library-sort" bind:value={sortMode} class="sort-select">
-            <option value="last_opened">Last opened</option>
-            <option value="date_added">Date added</option>
-            <option value="title">Title</option>
-          </select>
-        </div>
-      </div>
     </header>
 
     <section class="library-view">
-      <div class="library-header">
-        <div>
-          <p class="eyebrow">library</p>
-          <h1 class="library-title">Your uploaded documents</h1>
-        </div>
+      <div class="library-toolbar">
         <p class="library-summary">{sortedDocuments.length} documents</p>
+
+        <div class="library-header-actions">
+          <label class="upload-btn paper-btn-accent">
+            <input type="file" accept=".pdf,.epub" class="sr-only" on:change={onFileChange} />
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" x2="12" y1="3" y2="15"></line>
+            </svg>
+            Upload
+          </label>
+
+          <div class="sort-control">
+            <label for="library-sort" class="sort-label">Sort</label>
+            <select id="library-sort" bind:value={sortMode} class="sort-select">
+              <option value="last_opened">Last opened</option>
+              <option value="date_added">Date added</option>
+              <option value="title">Title</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {#if loading}
@@ -555,9 +552,9 @@
   }
 
   .topbar {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 420px) minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
     gap: 16px;
     padding: 14px 22px;
     background: var(--topbar-bg);
@@ -570,6 +567,7 @@
     align-items: center;
     gap: 18px;
     min-width: 0;
+    justify-self: start;
   }
 
   .wordmark {
@@ -601,10 +599,12 @@
     background: var(--paper-2);
   }
 
-  .topbar-right {
+  .library-header-actions {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 12px;
+    flex-wrap: wrap;
   }
 
   .upload-btn {
@@ -648,9 +648,10 @@
 
   .search-wrap {
     position: relative;
-    flex: 1;
+    width: 100%;
     max-width: 420px;
     min-width: 0;
+    justify-self: center;
   }
 
   .search-box {
@@ -788,30 +789,13 @@
     padding: 22px clamp(18px, 3vw, 40px) 30px;
   }
 
-  .library-header {
+  .library-toolbar {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 16px;
     margin: 0 auto 16px;
     max-width: 1280px;
-  }
-
-  .eyebrow {
-    margin: 0 0 8px;
-    font-family: var(--font-serif);
-    font-size: 13px;
-    font-weight: 300;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-  }
-
-  .library-title {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 500;
-    color: var(--ink);
   }
 
   .library-summary {
@@ -1006,13 +990,26 @@
     }
 
     .topbar-left,
-    .topbar-right {
+    .library-header-actions {
       flex-wrap: wrap;
       justify-content: space-between;
     }
 
-    .library-header {
+    .topbar {
+      grid-template-columns: 1fr;
+    }
+
+    .search-wrap {
+      max-width: none;
+    }
+
+    .library-toolbar {
       flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .library-header-actions {
+      justify-content: flex-start;
     }
 
     .books-grid {

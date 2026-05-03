@@ -41,7 +41,7 @@
   };
 
   type ZoomMode = 'fit-width' | 'fit-page' | 'custom';
-  type HighlightMode = 'text' | 'draw';
+  type HighlightMode = 'off' | 'text' | 'draw';
   type JobStatus = 'ready' | 'processing' | 'failed';
   type SidebarMode = 'annotations' | 'document-notes';
 
@@ -95,6 +95,8 @@
   let currentPage = 1;
   let totalPages = data.document.page_count ?? 0;
   let maxPageReached = 1;
+  let pageJumpDraft = '1';
+  let pageJumpFocused = false;
 
   function loadProgress() {
     try {
@@ -181,7 +183,8 @@
     saveProgress();
   });
   let zoomMode: ZoomMode = 'fit-width';
-  let highlightMode: HighlightMode = 'text';
+  let highlightMode: HighlightMode = 'off';
+  let lastHighlightMode: Exclude<HighlightMode, 'off'> = 'text';
   let customZoom = 1;
   let currentScale = 1;
   let pdfViewerHostEl: HTMLDivElement | null = null;
@@ -251,7 +254,7 @@
 
   let selectedHighlightColorIndex = DEFAULT_HIGHLIGHT_COLOR_INDEX;
   let pdfHighlighterUtils: Partial<PdfHighlighterUtils> = {
-    selectedTool: 'highlight_pen',
+    selectedTool: 'text_selection',
     selectedColorIndex: selectedHighlightColorIndex,
     colors: HIGHLIGHT_COLOR_OPTIONS.map((option) => option.hex),
     highlightMixBlendMode: 'multiply',
@@ -262,9 +265,8 @@
   $: authorsLabel = data.document.authors && data.document.authors.length > 0
     ? data.document.authors.join(', ')
     : 'Unknown author';
-  $: pageDisplay = totalPages > 0 ? `${currentPage} / ${totalPages}` : '—';
-  $: readingProgressLabel = totalPages > 0 ? `p. ${currentPage} of ${totalPages}` : 'p. —';
   $: readingProgressPercent = computeProgressPercent(currentPage, totalPages);
+  $: if (!pageJumpFocused) pageJumpDraft = String(currentPage);
   $: readingProgressComplete = readingProgressPercent >= 100;
   $: zoomDisplay =
     zoomMode === 'fit-width'
@@ -1196,17 +1198,24 @@
 
   function setHighlightMode(mode: HighlightMode) {
     highlightMode = mode;
+    if (mode !== 'off') lastHighlightMode = mode;
     pdfHighlighterUtils = {
       ...pdfHighlighterUtils,
-      selectedTool: mode === 'text' ? 'highlight_pen' : 'area_selection',
+      selectedTool: mode === 'text' ? 'highlight_pen' : mode === 'draw' ? 'area_selection' : 'text_selection',
       selectedColorIndex: getCurrentColorIndex(),
       colors: HIGHLIGHT_COLOR_OPTIONS.map((option) => option.hex),
       highlightMixBlendMode: 'multiply',
-      textSelectionDelay: -1,
+      textSelectionDelay: mode === 'off' ? 1500 : -1,
     };
     statusMessage = mode === 'text'
       ? 'Select text directly in the PDF to save a highlight.'
-      : 'Click and drag over the PDF to draw a highlight box.';
+      : mode === 'draw'
+        ? 'Click and drag over the PDF to draw a highlight box.'
+        : 'Highlighting is off.';
+  }
+
+  function toggleHighlightTools() {
+    setHighlightMode(highlightMode === 'off' ? lastHighlightMode : 'off');
   }
 
   function setFitWidth() {
@@ -1268,6 +1277,38 @@
     scrollToPage(currentPage + 1);
   }
 
+  function resetPageJumpDraft() {
+    pageJumpDraft = String(currentPage);
+  }
+
+  function commitPageJump() {
+    const requestedPage = Number.parseInt(pageJumpDraft, 10);
+    if (!Number.isFinite(requestedPage)) {
+      resetPageJumpDraft();
+      return;
+    }
+    scrollToPage(Math.min(Math.max(requestedPage, 1), totalPages || requestedPage));
+  }
+
+  function handlePageJumpKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitPageJump();
+      (event.currentTarget as HTMLInputElement).blur();
+    } else if (event.key === 'Escape') {
+      resetPageJumpDraft();
+      (event.currentTarget as HTMLInputElement).blur();
+    }
+  }
+
+  function handleReadingProgressClick(event: MouseEvent) {
+    if (!totalPages) return;
+    const track = event.currentTarget as HTMLButtonElement;
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    scrollToPage(Math.min(totalPages, Math.max(1, Math.floor(ratio * totalPages) + 1)));
+  }
+
   onMount(() => {
     if (typeof window !== 'undefined') {
       window.scrollTo(0, 0);
@@ -1288,7 +1329,7 @@
         scheduleQueryJump();
       });
     });
-    setHighlightMode('text');
+    setHighlightMode('off');
 
     const handleBeforeUnload = () => saveProgress();
     const progressSaveInterval = window.setInterval(saveProgress, 5000);
@@ -1515,8 +1556,18 @@
       letter-spacing: 0.04em;
       white-space: nowrap;
     }
-    .tb-progress-track { width: 68px; height: 2px; background: var(--paper-3); border-radius: 999px; overflow: hidden; }
-    .tb-progress-fill  { height: 100%; border-radius: inherit; transition: background 0.3s; }
+    .tb-progress-track {
+      width: 68px;
+      height: 2px;
+      padding: 0;
+      background: var(--paper-3);
+      border: 0;
+      border-radius: 999px;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .tb-progress-track:disabled { cursor: default; }
+    .tb-progress-fill  { display: block; height: 100%; border-radius: inherit; transition: background 0.3s; }
     .tb-progress-fill--reading { background: linear-gradient(90deg, #e11d48, #fb7185); }
     .tb-progress-fill--complete { background: linear-gradient(90deg, #36b37e, #65d19c); }
 
@@ -1542,9 +1593,17 @@
       background: var(--panel-bg); white-space: nowrap;
       transition: background 0.15s, color 0.15s;
     }
-    .tb-summary:hover { background: var(--paper-2); color: var(--ink); }
+    .tb-summary:hover, .tb-summary.tb-active { background: var(--paper-2); color: var(--ink); }
+    .tb-summary.tb-active { border-color: color-mix(in srgb, var(--accent) 38%, var(--rule)); }
     .tb-summary::after { content: '\25BE'; font-size: 11px; margin-left: 2px; }
     .tb-summary::-webkit-details-marker { display: none; }
+    .tb-summary--icon {
+      justify-content: center;
+      width: 34px;
+      height: 30px;
+      padding: 0;
+    }
+    .tb-summary--icon::after { margin-left: 0; }
 
     .tb-dropdown {
       position: absolute; top: calc(100% + 4px); left: 0; z-index: 200;
@@ -1571,13 +1630,30 @@
     .tb-dropdown-item.tb-active::before { content: '\2713  '; }
 
     .tb-dropdown-divider { height: 0.5px; background: var(--rule); margin: 4px 0; }
+    .tb-dropdown-label {
+      padding: 7px 14px 4px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+    .tb-color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--tb-color);
+      border: 1px solid rgba(26,24,20,0.22);
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
 
     .tb-slider-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: color-mix(in srgb, var(--panel-bg) 78%, transparent); }
     .tb-slider-btn { font-size: 14px; color: var(--ink-3); background: transparent; border: none; cursor: pointer; padding: 0 2px; flex-shrink: 0; line-height: 1; }
     .tb-slider-btn:hover { color: var(--ink); }
     .tb-slider { flex: 1; accent-color: var(--accent); }
 
-    /* ── Page navigation ──────────────── */
+    /* ── Reading position navigation ──────────────── */
     .tb-nav { display: flex; align-items: center; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--panel-bg); }
     .tb-nav-btn {
       font-family: var(--font-mono); font-size: 13px; color: var(--ink-3);
@@ -1588,7 +1664,34 @@
     .tb-nav-btn:last-child  { border-left:  0.5px solid var(--rule); }
     .tb-nav-btn:hover:not(:disabled) { background: var(--paper-2); color: var(--ink); }
     .tb-nav-btn:disabled { opacity: 0.3; cursor: default; }
-    .tb-nav-page { padding: 5px 9px; font-size: 11px; }
+    .tb-nav-page {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px;
+      font-size: 11px;
+    }
+    .tb-nav-prefix,
+    .tb-nav-percent { color: var(--ink-3); }
+    .tb-nav-progress { margin-left: 2px; }
+
+    .tb-page-input {
+      width: 3.2ch;
+      min-width: 28px;
+      padding: 2px 0;
+      border: 0;
+      border-bottom: 1px solid transparent;
+      background: transparent;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      text-align: center;
+      outline: none;
+    }
+    .tb-page-input:focus {
+      border-bottom-color: var(--accent);
+    }
+    .tb-page-total { color: var(--ink-3); }
 
     /* ── Link buttons ────────────────── */
     .tb-link {
@@ -1600,6 +1703,15 @@
       white-space: nowrap; transition: background 0.15s, color 0.15s;
     }
     .tb-link:hover { background: var(--paper-2); color: var(--ink); }
+    .tb-link--icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      font-size: 14px;
+    }
 
     .sr-only {
       position: absolute; width: 1px; height: 1px;
@@ -1614,10 +1726,12 @@
       gap: 10px;
       min-width: 240px;
       max-width: 320px;
-      background: var(--paper);
-      border: 0.5px solid rgba(26,24,20,0.14);
+      background: var(--panel-bg-strong) !important;
+      background-color: var(--panel-bg-strong) !important;
+      color: var(--ink) !important;
+      border: 0.5px solid var(--rule) !important;
       border-radius: 10px;
-      box-shadow: 0 8px 28px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.07);
+      box-shadow: var(--shadow-strong) !important;
       padding: 14px 16px;
     }
     .hp-label {
@@ -1828,6 +1942,45 @@
 
     .reader-sidebar-search input::placeholder {
       color: var(--ink-3);
+    }
+
+    .reader-sidebar-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px 10px;
+      border-bottom: 1px solid var(--rule);
+      background: var(--panel-bg-strong);
+      flex-shrink: 0;
+    }
+
+    .reader-sidebar-tools-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      margin-right: 2px;
+    }
+
+    .reader-sidebar-tools button {
+      border: 1px solid var(--rule) !important;
+      background: var(--panel-bg) !important;
+      color: var(--ink-3) !important;
+      border-radius: 6px !important;
+      padding: 4px 8px !important;
+      font-family: var(--font-serif) !important;
+      font-size: 12px !important;
+      font-weight: 300 !important;
+      letter-spacing: 0.06em !important;
+      cursor: pointer;
+    }
+
+    .reader-sidebar-tools button.active {
+      color: var(--ink) !important;
+      border-color: var(--accent) !important;
+      background: var(--accent-soft) !important;
     }
 
     .reader-sidebar > section {
@@ -2300,9 +2453,35 @@
     </div>
 
     <div class="reader-topbar-center">
-      <span class="tb-label">{readingProgressLabel}</span>
-      <div class="tb-progress-track"><div class="tb-progress-fill" class:tb-progress-fill--reading={!readingProgressComplete} class:tb-progress-fill--complete={readingProgressComplete} style={`width:${readingProgressPercent}%`}></div></div>
-      <span class="tb-label">{readingProgressPercent}%</span>
+      <div class="tb-nav" aria-label="Reading position">
+        <button class="tb-nav-btn" type="button" disabled={currentPage <= 1} on:click={goToPreviousPage} aria-label="Previous page">‹</button>
+        <span class="tb-label tb-nav-page">
+          <span class="tb-nav-prefix">p.</span>
+          <input
+            class="tb-page-input"
+            type="text"
+            inputmode="numeric"
+            aria-label="Go to page"
+            bind:value={pageJumpDraft}
+            on:focus={() => { pageJumpFocused = true; }}
+            on:blur={() => { pageJumpFocused = false; commitPageJump(); }}
+            on:keydown={handlePageJumpKeydown}
+          />
+          <span class="tb-page-total">/ {totalPages || '—'}</span>
+          <span class="sr-only">{currentPage} / {totalPages || '—'}</span>
+          <span class="tb-nav-percent">· {readingProgressPercent}%</span>
+          <button
+            class="tb-progress-track tb-nav-progress"
+            type="button"
+            disabled={!totalPages}
+            on:click={handleReadingProgressClick}
+            aria-label="Jump by reading progress"
+          >
+            <span class="tb-progress-fill" class:tb-progress-fill--reading={!readingProgressComplete} class:tb-progress-fill--complete={readingProgressComplete} style={`width:${readingProgressPercent}%`}></span>
+          </button>
+        </span>
+        <button class="tb-nav-btn" type="button" disabled={currentPage >= totalPages} on:click={goToNextPage} aria-label="Next page">›</button>
+      </div>
       {#if jobStatus !== 'ready'}
         <span class="tb-status tb-status--{jobStatus}">{jobStatusLabel}</span>
       {/if}
@@ -2311,33 +2490,41 @@
     <div class="reader-topbar-right">
       <!-- sr-only for tests -->
       <span class="sr-only">
-        {#if highlightMode === 'text'}Select text directly in the PDF to save a highlight.{:else}Click and drag over the PDF to draw a highlight box.{/if}
+        {#if highlightMode === 'text'}Select text directly in the PDF to save a highlight.{:else if highlightMode === 'draw'}Click and drag over the PDF to draw a highlight box.{:else}Highlighting is off.{/if}
       </span>
 
-      <!-- Highlight mode dropdown -->
+      <!-- Highlight dropdown -->
       <details class="tb-menu">
-        <summary class="tb-summary">
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
-          {highlightMode === 'text' ? 'Select text' : 'Draw box'}
+        <summary class="tb-summary tb-summary--icon" class:tb-active={highlightMode !== 'off'} aria-label="Highlight tools" title={highlightMode === 'off' ? 'Highlight tools: off' : `Highlight tools: ${highlightMode}`}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 17 4 4 11-11-4-4L3 17z"/><path d="m14 6 2-2 4 4-2 2"/><path d="M3 21h10"/></svg>
+          <span class="sr-only">Highlight tools</span>
         </summary>
-        <div class="tb-dropdown">
-          <button class="tb-dropdown-item" class:tb-active={highlightMode === 'text'} on:click={() => setHighlightMode('text')}>Select text</button>
-          <button class="tb-dropdown-item" class:tb-active={highlightMode === 'draw'} on:click={() => setHighlightMode('draw')}>Draw box</button>
+        <div class="tb-dropdown tb-dropdown--right">
+          <div class="tb-dropdown-label">Mode</div>
+          <button type="button" class="tb-dropdown-item" class:tb-active={highlightMode === 'off'} on:click={() => setHighlightMode('off')}>Off / read</button>
+          <button type="button" class="tb-dropdown-item" class:tb-active={highlightMode === 'text'} on:click={() => setHighlightMode('text')}>Select text</button>
+          <button type="button" class="tb-dropdown-item" class:tb-active={highlightMode === 'draw'} on:click={() => setHighlightMode('draw')}>Draw box</button>
+          <div class="tb-dropdown-divider"></div>
+          <div class="tb-dropdown-label">Color</div>
+          {#each HIGHLIGHT_COLOR_OPTIONS as option, index}
+            <button
+              type="button"
+              class="tb-dropdown-item"
+              class:tb-active={getCurrentColorIndex() === index}
+              on:click={() => setSelectedHighlightColor(index)}
+            >
+              <span class="tb-color-dot" style={`--tb-color: ${option.hex};`}></span>
+              {option.label}
+            </button>
+          {/each}
         </div>
       </details>
 
-      <!-- Page navigation -->
-      <div class="tb-nav">
-        <button class="tb-nav-btn" type="button" disabled={currentPage <= 1} on:click={goToPreviousPage} aria-label="Previous page">‹</button>
-        <span class="tb-label tb-nav-page">{pageDisplay}</span>
-        <button class="tb-nav-btn" type="button" disabled={currentPage >= totalPages} on:click={goToNextPage} aria-label="Next page">›</button>
-      </div>
-
       <!-- Zoom dropdown -->
       <details class="tb-menu">
-        <summary class="tb-summary">
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg>
-          {zoomDisplay}
+        <summary class="tb-summary tb-summary--icon" aria-label={`Zoom: ${zoomDisplay}`} title={`Zoom: ${zoomDisplay}`}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg>
+          <span class="sr-only">Zoom: {zoomDisplay}</span>
         </summary>
         <div class="tb-dropdown tb-dropdown--right">
           <button class="tb-dropdown-item" class:tb-active={zoomMode === 'fit-width'} on:click={setFitWidth}>Fit width</button>
@@ -2354,7 +2541,7 @@
         </div>
       </details>
 
-      <a class="tb-link" href={data.fileUrl} target="_blank" rel="noreferrer">↗ pdf</a>
+      <a class="tb-link tb-link--icon" href={data.fileUrl} target="_blank" rel="noreferrer" aria-label="Open PDF in a new tab" title="Open PDF">↗</a>
     </div>
   </header>
 

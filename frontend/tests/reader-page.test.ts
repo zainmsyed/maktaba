@@ -236,10 +236,17 @@ describe('reader page', () => {
 
     await waitFor(() => {
       expect(getByRole('tab', { name: 'highlights' })).toBeTruthy();
+      expect(getByRole('button', { name: 'Off / read' })).toBeTruthy();
       expect(getByRole('button', { name: 'Select text' })).toBeTruthy();
       expect(getByRole('button', { name: 'Draw box' })).toBeTruthy();
-      expect(getByText(/Select text directly in the PDF/i)).toBeTruthy();
+      expect(getByText(/Highlighting is off/i)).toBeTruthy();
       expect(getByText('No annotations yet.')).toBeTruthy();
+    });
+
+    await fireEvent.click(getByRole('button', { name: 'Select text' }));
+
+    await waitFor(() => {
+      expect(getByText(/Select text directly in the PDF/i)).toBeTruthy();
     });
 
     await fireEvent.click(getByRole('button', { name: 'Draw box' }));

@@ -182,7 +182,21 @@
 <style>
   /* Minimal overrides - prefer the global paper theme classes */
   .ne-shell { padding: 0; }
-  .ne-shell--popup { padding: 0; }
+  .ne-shell--popup {
+    padding: 0;
+    background: transparent !important;
+    border-top: 0 !important;
+    color: var(--ink);
+  }
+  .ne-shell--popup .ne-label,
+  .ne-shell--popup .ne-status,
+  .ne-shell--popup .ne-hint,
+  .ne-shell--popup .ne-textarea,
+  .ne-shell--popup .ne-quote {
+    color: inherit;
+  }
+  .ne-shell--popup .ne-quote { color: var(--ink-2); }
+  .ne-shell--popup .ne-textarea::placeholder { color: var(--ink-3); }
 
   .ne-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .ne-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
