@@ -1,0 +1,104 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-maktaba}"
+      POSTGRES_USER: "${POSTGRES_USER:-app}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?set DB_PASSWORD in .env}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-maktaba}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  db-bootstrap:
+    build:
+      context: ./backend
+    restart: "no"
+    environment:
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:?set DB_PASSWORD in .env}@postgres/${POSTGRES_DB:-maktaba}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "app.db", "bootstrap"]
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:?set DB_PASSWORD in .env}@postgres/${POSTGRES_DB:-maktaba}"
+      DATA_DIR: "${DATA_DIR:-/data}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
+    volumes:
+      - ./data:/data
+    expose:
+      - "8000"
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)\""
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:?set DB_PASSWORD in .env}@postgres/${POSTGRES_DB:-maktaba}"
+      DATA_DIR: "${DATA_DIR:-/data}"
+    volumes:
+      - ./data:/data
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
+    command: ["python", "-m", "app.worker"]
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+    restart: unless-stopped
+    environment:
+      PUBLIC_API_URL: "${PUBLIC_API_URL:-/api}"
+      SERVER_API_URL: "${SERVER_API_URL:-http://backend:8000}"
+      PORT: "3000"
+      HOST: "0.0.0.0"
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  pgdata: {}
+  caddy_data: {}
+  caddy_config: {}

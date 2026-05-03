@@ -1,0 +1,14 @@
+# Replace maktaba.example.com with your actual domain
+# For local testing, use :80 instead
+
+maktaba.example.com {
+	# Frontend (SvelteKit)
+	reverse_proxy frontend:3000
+
+	# Backend API
+	reverse_proxy /api/* backend:8000
+	reverse_proxy /health backend:8000
+
+	# Optional: compress responses
+	encode gzip
+}
