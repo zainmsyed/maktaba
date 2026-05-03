@@ -29,6 +29,8 @@ frontend/src/app.d.ts — Type declarations for SvelteKit PageData (apiUrl)
 frontend/src/app.html — SvelteKit HTML template
 frontend/src/components/NoteEditor.svelte — Reusable note editor with autosave, saving indicator, and focus/save APIs
 frontend/src/components/NotePopup.svelte — Accessible popup wrapper with focus trap and header/close control
+frontend/src/lib/popup-viewport-guard.ts — Shared viewport-guard utility for keeping popup containers within the viewport boundary
+frontend/src/lib/progress.ts — Pure helper for computing reading progress percentage from current page and total pages
 frontend/src/lib/theme.css — Paper-style UI tokens and component styles used across the app
 frontend/src/pdfjs-dist.d.ts — Minimal TypeScript declarations for pdfjs worker and viewer pieces
 frontend/src/routes/+layout.svelte — Root layout importing global styles
@@ -48,7 +50,9 @@ frontend/tests/library-page.test.ts — Tests for library UI, upload flow, and p
 frontend/tests/mocks/MockPdfHighlighter.svelte — Mock PdfHighlighter used in frontend tests
 frontend/tests/mocks/MockPdfLoader.svelte — Mock PdfLoader harness for tests
 frontend/tests/mocks/NotePopupHarness.svelte — Small harness to test NotePopup focus behavior
+frontend/tests/mocks/NotePopupTextareaHarness.svelte — Test harness that renders NotePopup with a textarea and buttons to verify focus-trap behavior
 frontend/tests/note-editor.test.ts — Component tests for NoteEditor autosave and focus APIs
+frontend/tests/progress.test.ts — Unit tests for computeProgressPercent covering edge cases and boundary values
 frontend/tests/reader-page.server.test.ts — Server-loader tests for the reader page
 frontend/tests/reader-page.test.ts — Integration tests for reader page: highlights, notes autosave, and sidebar interactions
 frontend/tests/test-helpers.ts — Shared test helpers and timer utilities for Vitest
@@ -57,7 +61,3 @@ frontend/vite.config.ts — Vite configuration for the frontend project
 package-lock.json — package-lock.json configuration file
 package.json — Root package.json
 scripts/run-integration-tests.sh — Helper script to run integration tests (local/docker)
-
-frontend/tests/mocks/NotePopupTextareaHarness.svelte — (undescribed)
-frontend/src/lib/progress.ts — (undescribed)
-frontend/tests/progress.test.ts — (undescribed)
