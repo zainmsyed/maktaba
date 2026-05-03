@@ -80,24 +80,48 @@ docker compose -f docker-compose.prod.yml up --build -d
 docker compose -f docker-compose.prod.yml logs -f
 ```
 
-## Local / HTTP-Only Testing
+## Home Lab / Local Network (No Domain)
 
-If you don't have a domain yet, edit `Caddyfile` to use `:80` (no HTTPS):
+For running on a local server without a public domain or HTTPS:
 
-```
-:80 {
-    reverse_proxy frontend:3000
-    reverse_proxy /api/* backend:8000
-    reverse_proxy /health backend:8000
-}
-```
+### 1. Environment
 
-Then:
 ```bash
-docker compose -f docker-compose.prod.yml up --build -d
+cp .env.example .env
 ```
 
-Access at `http://<server-ip>`.
+Edit `.env`:
+
+```env
+DB_PASSWORD=your-strong-password
+PUBLIC_API_URL=/api
+CORS_ORIGINS=*
+```
+
+### 2. Deploy
+
+```bash
+docker compose -f docker-compose.local.yml up --build -d
+```
+
+### 3. Access
+
+Open `http://<server-ip>` from any device on your network.
+
+Everything runs on port 80. Caddy routes `/api/*` to the backend and everything else to the frontend — no CORS issues, no HTTPS setup.
+
+### 4. Updates
+
+```bash
+git pull origin scaffold
+docker compose -f docker-compose.local.yml up --build -d
+```
+
+---
+
+## Public Server with Domain
+
+For a public-facing server with automatic HTTPS, use `docker-compose.prod.yml` instead.
 
 ## Architecture
 
@@ -108,6 +132,6 @@ Access at `http://<server-ip>`.
 | `backend` | FastAPI API | internal (proxied by Caddy) |
 | `worker` | Background PDF text extraction | internal only |
 | `frontend` | SvelteKit (prod build) | internal (proxied by Caddy) |
-| `caddy` | Reverse proxy + HTTPS | 80, 443 |
+| `caddy` | Reverse proxy (HTTP local / HTTPS prod) | 80 (local) or 80, 443 (prod) |
 
 Data (uploaded PDFs, EPUBs) persists in `./data/` on the host.

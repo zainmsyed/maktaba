@@ -1,0 +1,11 @@
+:80 {
+	# Frontend (SvelteKit)
+	reverse_proxy frontend:3000
+
+	# Backend API
+	reverse_proxy /api/* backend:8000
+	reverse_proxy /health backend:8000
+
+	# Optional: compress responses
+	encode gzip
+}
