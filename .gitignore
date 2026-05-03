@@ -12,3 +12,9 @@ Thumbs.db
 .jj/
 node_modules/
 .fallow/
+
+# Uploaded documents (keep .gitkeep for directory structure)
+data/pdfs/*
+!data/pdfs/.gitkeep
+data/epubs/*
+!data/epubs/.gitkeep

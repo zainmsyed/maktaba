@@ -210,6 +210,41 @@ describe('library page', () => {
     expect(queryByText('draft')).toBeNull();
   });
 
+  it('keeps the delete button right-aligned when a card has no stats', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        documents: [
+          {
+            document: {
+              id: 'doc-no-stats',
+              title: 'No Stats',
+              authors: ['Anonymous'],
+              format: 'pdf',
+              created_at: '2024-01-01T10:00:00Z',
+              updated_at: '2024-01-01T10:00:00Z',
+              reading_progress: {},
+            },
+            jobs: [],
+            highlight_count: 0,
+            note_count: 0,
+          },
+        ],
+      }),
+    );
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container } = render(LibraryPage, {
+      props: { data: { apiUrl: 'http://api.test' } },
+    });
+
+    await waitFor(() => {
+      const deleteBtn = container.querySelector('.delete-btn');
+      expect(deleteBtn).toBeTruthy();
+      expect(deleteBtn?.classList.contains('push-right')).toBe(true);
+    });
+  });
+
   it('polls for job updates until processing documents become ready', async () => {
     vi.useFakeTimers();
 

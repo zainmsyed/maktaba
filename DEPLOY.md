@@ -5,7 +5,7 @@
 ```bash
 # 1. Clone / pull latest
 cd /path/to/maktaba
-git pull origin scaffold
+git pull origin main
 
 # 2. Create env file
 cp .env.example .env
@@ -75,7 +75,7 @@ curl https://yourdomain.com/health
 ## Updates
 
 ```bash
-git pull origin scaffold
+git pull origin main
 docker compose -f docker-compose.prod.yml up --build -d
 docker compose -f docker-compose.prod.yml logs -f
 ```
@@ -113,7 +113,7 @@ Everything runs on port 80. Caddy routes `/api/*` to the backend and everything 
 ### 4. Updates
 
 ```bash
-git pull origin scaffold
+git pull origin main
 docker compose -f docker-compose.local.yml up --build -d
 ```
 

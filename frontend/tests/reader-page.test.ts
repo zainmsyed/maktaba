@@ -771,6 +771,88 @@ describe('reader page', () => {
     expect(queryByText('Saved')).toBeNull();
   });
 
+  it('popup note save sends the backend highlight id, not the temporary store id', async () => {
+    vi.useFakeTimers();
+    const { getByTestId, getByRole } = render(ReaderPage, {
+      props: {
+        data: {
+          apiUrl: 'http://api.test',
+          fileUrl: 'http://api.test/api/documents/doc-1/file',
+          document: {
+            id: 'doc-1',
+            title: 'Popup ID Test',
+            authors: ['Ada Lovelace'],
+            format: 'pdf',
+            page_count: 1,
+          },
+          jobs: [],
+        },
+      },
+    });
+
+    await advanceAndFlush(0);
+    const textLayerHost = getByTestId('pdf-text-layer-host');
+    await fireEvent.mouseUp(textLayerHost);
+
+    // Wait for highlight persistence POST
+    await waitFor(() => {
+      const postCall = fetchMock.mock.calls.find(
+        ([input, init]) => init?.method === 'POST' && String(input).includes('/highlights'),
+      );
+      expect(postCall).toBeTruthy();
+    });
+    await advanceAndFlush(0);
+
+    // The mock highlighter auto-opens the popup for the persisted highlight
+    const popupTextarea = getByRole('textbox', { name: 'Note content' });
+    await fireEvent.input(popupTextarea, { target: { value: 'Popup note text' } });
+    await advanceAndFlush(500);
+    await advanceAndFlush(0);
+
+    // Find the note create call and assert it used the backend highlight id
+    const noteCreateCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        init?.method === 'POST' &&
+        String(input).includes('/api/documents/doc-1/notes'),
+    );
+    expect(noteCreateCall).toBeTruthy();
+    const body = JSON.parse(String(noteCreateCall?.[1]?.body));
+    // The backend returned 'highlight-1' for the persisted highlight;
+    // the popup must resolve the temporary store id to the backend id.
+    expect(body.highlight_id).toBe('highlight-1');
+  });
+
+  it('sidebar annotation delete button stays right-aligned when there is no note text', async () => {
+    vi.useFakeTimers();
+    const { getByTestId, getByRole } = render(ReaderPage, {
+      props: {
+        data: {
+          apiUrl: 'http://api.test',
+          fileUrl: 'http://api.test/api/documents/doc-1/file',
+          document: {
+            id: 'doc-1',
+            title: 'Alignment Test',
+            authors: ['Ada Lovelace'],
+            format: 'pdf',
+            page_count: 1,
+          },
+          jobs: [],
+        },
+      },
+    });
+
+    await advanceAndFlush(0);
+    const textLayerHost = getByTestId('pdf-text-layer-host');
+    await fireEvent.mouseUp(textLayerHost);
+    await advanceAndFlush(0);
+
+    // Ensure no note text was added (default empty)
+    const sidebar = getByTestId('notes-sidebar');
+    const deleteBtn = sidebar.querySelector('.paper-note-del');
+    expect(deleteBtn).toBeTruthy();
+    expect(deleteBtn?.classList.contains('push-right')).toBe(true);
+  });
+
   it('jumps to a page via the numeric input and clamps out-of-range values', async () => {
     const { getByRole, getAllByText } = render(ReaderPage, {
       props: {

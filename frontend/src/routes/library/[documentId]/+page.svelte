@@ -2076,64 +2076,11 @@
       padding: 14px 18px 16px !important;
     }
 
-    .reader-highlights-panel .grid.grid-cols-2 button,
-    .reader-navigation-panel button,
-    .reader-stage .reader-topbar-actions a,
     .reader-sidebar .reader-sidebar-tab {
       font-family: var(--font-serif) !important;
       font-size: 14px !important;
       font-weight: 300 !important;
       letter-spacing: 0.08em !important;
-    }
-
-    .reader-highlights-panel .grid.grid-cols-2 button {
-      min-height: 30px;
-      border-radius: 0 !important;
-      padding: 0 12px !important;
-      background: var(--paper-bg-2) !important;
-      border: 0.5px solid var(--rule) !important;
-      color: var(--ink) !important;
-      box-shadow: none !important;
-    }
-
-    .reader-highlights-panel .grid.grid-cols-2 button[class*='bg-cyan-500/20'] {
-      background: var(--paper-bg) !important;
-      border-color: var(--accent) !important;
-      color: var(--ink) !important;
-    }
-
-    .reader-navigation-panel .flex.items-center.gap-2 > button,
-    .reader-navigation-panel .min-w-24 {
-      border-radius: 0 !important;
-      background: var(--paper-bg) !important;
-      border-color: var(--rule) !important;
-      font-family: var(--font-serif) !important;
-      font-size: 14px !important;
-    }
-
-    .reader-sidebar > section[data-testid='notes-sidebar'] {
-      order: 1;
-    }
-
-    .reader-sidebar > section.reader-highlights-panel {
-      order: 2;
-    }
-
-    .reader-sidebar > section.reader-status-panel {
-      order: 3;
-    }
-
-    .reader-sidebar > section.reader-document-panel {
-      order: 4;
-    }
-
-    .reader-sidebar > section.reader-navigation-panel {
-      order: 5;
-    }
-
-    .reader-sidebar > section.reader-zoom-panel {
-      order: 6;
-      border-bottom: 0 !important;
     }
 
     .reader-sidebar .text-slate-500,
@@ -2252,11 +2199,6 @@
 
     .reader-sidebar [aria-label='Note content']::placeholder {
       color: var(--ink-3) !important;
-    }
-
-    .reader-sidebar .note-item,
-    .reader-sidebar .note-item * {
-      font-family: var(--font-serif) !important;
     }
 
     .reader-sidebar .rounded-2xl {
@@ -2456,7 +2398,6 @@
       cursor: pointer;
       padding: 2px 4px;
       flex-shrink: 0;
-      margin-left: auto;
     }
     .paper-note-del:hover { color: #c44040; }
 
@@ -2730,7 +2671,7 @@
                     </button>
                     <button
                       type="button"
-                      class="paper-note-del"
+                      class="paper-note-del push-right"
                       aria-label="Delete highlight"
                       on:click={(event) => {
                         event.stopPropagation();
@@ -2752,7 +2693,7 @@
                 <button type="button" class="paper-note-body-btn" on:click={() => handleSidebarNoteClick(note)}>
                   <div class="paper-note-body">{note.content || '(empty note)'}</div>
                 </button>
-                <button type="button" class="paper-note-del" aria-label="Delete note" on:click={() => handleNoteDelete(note)}>✕</button>
+                <button type="button" class="paper-note-del push-right" aria-label="Delete note" on:click={() => handleNoteDelete(note)}>✕</button>
               </div>
             </div>
           {/each}

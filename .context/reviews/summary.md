@@ -1,12 +1,14 @@
 # Review Summary
 
-**Last updated:** 2026-05-03T02:39:01Z
+**Last updated:** 2026-05-03T19:14:42Z
 
 ## Findings
 - When adding schema/bootstrap logic, include at least one automated Postgres smoke test for tables, extensions, and indexes. | count: 2 | status: promoted | sources: review-20260424-204758.md, review-20260424-205443.md
+- - Rule candidate: Add small layout utility classes for common flex patterns. | count: 1 | status: tracked | sources: review-20260503-191016.md
 - Add a lightweight guideline: "Update .context/memory/index.md when adding or renaming substantive files." | count: 1 | status: tracked | sources: review-20260428-210149.md | stories: story-008
 - Add a lightweight pre-commit/static linting step (or CI job) to flag duplicate/unused imports and basic style issues. | count: 1 | status: tracked | sources: review-20260427-200715.md | stories: story-008
 - Add a test-pattern note in the repo (`frontend/tests/README.md`) describing stable approaches for DOM + timer-driven tests (useRealTimers vs explicit waitFor + advanceTimers). | count: 1 | status: tracked | sources: review-20260427-200715.md | stories: story-008
+- Add small layout utility classes for common flex patterns. | count: 1 | status: tracked | sources: review-20260503-191224.md
 - Consider a rule: "Do not return raw exception messages in API HTTP 5xx responses; log internals and return a generic message." | count: 1 | status: tracked | sources: review-20260428-210149.md | stories: story-008
 - Do not return raw exception strings in 5xx responses; log internals and return a generic message. | count: 1 | status: tracked | sources: review-20260429-023249.md | stories: story-008
 - Do not return raw exception strings in HTTP 5xx responses; log details internally and return a generic message to clients. | count: 1 | status: tracked | sources: review-20260429-022103.md | stories: story-008
