@@ -315,6 +315,7 @@ async def create_document_upload(
             select(Document).where(
                 Document.file_hash == file_hash,
                 Document.format == document_format,
+                Document.deleted_at.is_(None),
             ),
         ).scalars().first()
         if existing is not None:
@@ -334,6 +335,7 @@ async def create_document_upload(
                             select(Document.id).where(
                                 Document.file_hash == file_hash,
                                 Document.format == document_format,
+                                Document.deleted_at.is_(None),
                             )
                         ).scalar_one_or_none()
 
@@ -346,6 +348,13 @@ async def create_document_upload(
                     .order_by(Job.created_at, Job.id),
                 ).scalars().all()
 
+            # If the active document row exists but the file is missing, restore the
+            # file from this upload so the reader can stream it again.
+            if temp_path is not None and final_path is not None and not final_path.exists():
+                os.replace(temp_path, final_path)
+                moved_to_final = True
+                temp_path = None
+
             # no DB changes were performed; clean up the temp file and return existing document
             if temp_path is not None:
                 temp_path.unlink(missing_ok=True)
@@ -353,6 +362,49 @@ async def create_document_upload(
                 created=False,
                 document=existing,
                 jobs=existing_jobs,
+            )
+
+        deleted_existing = session.exec(
+            select(Document)
+            .where(
+                Document.file_hash == file_hash,
+                Document.format == document_format,
+                Document.deleted_at.is_not(None),
+            )
+            .order_by(Document.deleted_at.desc()),
+        ).scalars().first()
+        if deleted_existing is not None:
+            deleted_existing.file_path = str(final_path)
+            deleted_existing.title = metadata.title
+            deleted_existing.authors = metadata.authors
+            deleted_existing.publication_date = metadata.publication_date
+            deleted_existing.page_count = metadata.page_count
+            deleted_existing.deleted_at = None
+
+            extract_job = Job(
+                document_id=deleted_existing.id,
+                job_type="extract_text",
+                payload=_job_payload(deleted_existing, "extract_text"),
+            )
+            embedding_job = Job(
+                document_id=deleted_existing.id,
+                job_type="generate_embedding",
+                payload=_job_payload(deleted_existing, "generate_embedding"),
+            )
+
+            session.add(deleted_existing)
+            session.add_all([extract_job, embedding_job])
+            session.flush()
+            os.replace(temp_path, final_path)
+            moved_to_final = True
+            session.commit()
+            session.refresh(deleted_existing)
+            session.refresh(extract_job)
+            session.refresh(embedding_job)
+            return DocumentUploadResult(
+                created=True,
+                document=deleted_existing,
+                jobs=[extract_job, embedding_job],
             )
 
         document = Document(

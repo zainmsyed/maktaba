@@ -385,6 +385,60 @@ class DocumentUploadTests(unittest.TestCase):
         docs2 = list_resp2.json().get("documents", [])
         self.assertEqual(len(docs2), 0)
 
+    def test_reupload_deleted_document_restores_it_and_recreates_jobs(self) -> None:
+        pdf_bytes = self._build_pdf_bytes(
+            title="Restore Deleted PDF",
+            author="Restore Test",
+            creation_date="D:20240424010203Z",
+        )
+        expected_hash = hashlib.sha256(pdf_bytes).hexdigest()
+
+        create_response = self.client.post(
+            "/api/documents",
+            files={"file": ("restore.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(create_response.status_code, 201)
+        original_document_id = UUID(create_response.json()["document"]["id"])
+
+        delete_response = self.client.delete(f"/api/documents/{original_document_id}")
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertTrue(delete_response.json()["deleted"])
+
+        list_after_delete = self.client.get("/api/documents")
+        self.assertEqual(list_after_delete.status_code, 200)
+        self.assertEqual(list_after_delete.json().get("documents", []), [])
+
+        reupload_response = self.client.post(
+            "/api/documents",
+            files={"file": ("restore.pdf", pdf_bytes, "application/pdf")},
+        )
+        self.assertEqual(reupload_response.status_code, 201)
+        restored_document = reupload_response.json()["document"]
+        self.assertEqual(UUID(restored_document["id"]), original_document_id)
+        self.assertEqual(restored_document["file_hash"], expected_hash)
+
+        restored_path = self.data_dir / "pdfs" / f"{expected_hash}.pdf"
+        self.assertTrue(restored_path.exists())
+
+        list_after_restore = self.client.get("/api/documents")
+        self.assertEqual(list_after_restore.status_code, 200)
+        documents = list_after_restore.json().get("documents", [])
+        self.assertEqual(len(documents), 1)
+        self.assertEqual(documents[0]["document"]["id"], str(original_document_id))
+
+        file_response = self.client.get(f"/api/documents/{original_document_id}/file")
+        self.assertEqual(file_response.status_code, 200)
+        self.assertEqual(file_response.headers.get("content-type"), "application/pdf")
+
+        with self.db_module.Session(self.db_module.engine) as session:
+            restored = session.get(Document, original_document_id)
+            self.assertIsNotNone(restored)
+            self.assertIsNone(restored.deleted_at)
+            jobs = session.exec(
+                select(Job).where(Job.document_id == original_document_id).order_by(Job.job_type),
+            ).all()
+            self.assertEqual([job.job_type for job in jobs], ["extract_text", "generate_embedding"])
+
     def test_delete_highlight_removes_linked_notes(self) -> None:
         pdf_bytes = self._build_pdf_bytes(
             title="Delete Highlight PDF",
