@@ -9,7 +9,7 @@
 const DEFAULT_SAFE_MARGIN = 12;
 const REPOSITION_DELAYS = [0, 30, 120];
 
-export function readBaseTop(container: HTMLElement): number | null {
+function readBaseTop(container: HTMLElement): number | null {
 	const currentTop = Number.parseFloat(container.style.top || '');
 	const adjustedTop = Number.parseFloat(container.dataset.adjustedTop || '');
 	const savedBaseTop = Number.parseFloat(container.dataset.baseTop || '');
@@ -30,7 +30,7 @@ export function readBaseTop(container: HTMLElement): number | null {
 	return Number.isFinite(baseTop) ? baseTop : null;
 }
 
-export function clampTop(
+function clampTop(
 	baseTop: number,
 	rect: DOMRect,
 	viewportHeight: number,
@@ -46,12 +46,12 @@ export function clampTop(
 	return nextTop;
 }
 
-export function applyTop(container: HTMLElement, top: number): void {
+function applyTop(container: HTMLElement, top: number): void {
 	container.style.top = `${top}px`;
 	container.dataset.adjustedTop = `${top}`;
 }
 
-export function guardPopupContainer(container: HTMLElement, safeMargin = DEFAULT_SAFE_MARGIN): void {
+function guardPopupContainer(container: HTMLElement, safeMargin = DEFAULT_SAFE_MARGIN): void {
 	const baseTop = readBaseTop(container);
 	if (baseTop === null) return;
 
@@ -61,13 +61,13 @@ export function guardPopupContainer(container: HTMLElement, safeMargin = DEFAULT
 	applyTop(container, nextTop);
 }
 
-export function guardPopupInView(node: HTMLElement, safeMargin = DEFAULT_SAFE_MARGIN): void {
+function guardPopupInView(node: HTMLElement, safeMargin = DEFAULT_SAFE_MARGIN): void {
 	const container = node.closest<HTMLElement>('.hl_tip_container');
 	if (!container) return;
 	guardPopupContainer(container, safeMargin);
 }
 
-export interface PopupViewportGuardOptions {
+interface PopupViewportGuardOptions {
 	safeMargin?: number;
 }
 
