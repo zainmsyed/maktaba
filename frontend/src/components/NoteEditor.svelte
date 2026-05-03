@@ -8,6 +8,7 @@
   export let onChange: ((draft: string) => void) | null = null;
   export let onSave: ((draft: string) => Promise<any>) | null = null;
   export let onClose: (() => void) | null = null;
+  export let onStatusChange: ((status: 'idle' | 'saving' | 'saved' | 'error') => void) | null = null;
   export let autoFocus = false;
 
   const dispatch = createEventDispatcher();
@@ -131,6 +132,8 @@
     }
   });
 
+  $: onStatusChange?.(status);
+
   onDestroy(() => {
     if (!skipDestroyAutosave && draft !== savedDraft && onSave) {
       void runSave();
@@ -168,19 +171,6 @@
         {/if}
       </span>
     </div>
-  {:else if status !== 'idle'}
-    <div class="ne-header ne-header--popup">
-      <span class="paper-save-status ne-status ne-status--{status}" aria-live="polite">
-        {#if status === 'saving'}
-          <svg class="ne-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          <span>Saving…</span>
-        {:else if status === 'saved'}
-          <span>Saved</span>
-        {:else if status === 'error'}
-          <span>Unable to save note</span>
-        {/if}
-      </span>
-    </div>
   {/if}
 
   {#if placement !== 'popup' && highlight?.extracted_text}
@@ -201,6 +191,12 @@
     <p class="paper-save-status ne-hint">
       {highlight ? 'Start typing to autosave this highlight note.' : 'Start typing to autosave this document note.'}
     </p>
+  {/if}
+
+  {#if placement === 'popup'}
+    <span class="sr-only" aria-live="polite">
+      {#if status === 'saving'}Saving…{:else if status === 'saved'}Saved{:else if status === 'error'}Unable to save note{/if}
+    </span>
   {/if}
 </div>
 
@@ -224,7 +220,6 @@
   .ne-shell--popup .ne-textarea::placeholder { color: var(--ink-3); }
 
   .ne-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .ne-header--popup { justify-content: flex-end; min-height: 18px; margin-bottom: 0; }
   .ne-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 
   /* Keep a small size for the back button so it doesn't dominate */
@@ -232,6 +227,13 @@
 
   .ne-spin { width: 12px; height: 12px; animation: ne-spin 0.8s linear infinite; }
   @keyframes ne-spin { to { transform: rotate(360deg); } }
+
+  /* status dot */
+  .paper-save-status { font-size: 10px; min-width: 56px; display: inline-flex; align-items: center; justify-content: center; }
+  .ne-status-dot { display: inline-block; width: 12px; height: 12px; border-radius: 999px; }
+  .ne-status-dot--saving { background: linear-gradient(90deg,#f59e0b,#fb923c); animation: ne-pulse 1s ease-in-out infinite; }
+  .ne-status-dot--saved { background: #16a34a; }
+  @keyframes ne-pulse { 0%{ transform: scale(1); opacity: 1 } 50%{ transform: scale(1.35); opacity: .65 } 100%{ transform: scale(1); opacity: 1 } }
 
   /* Ensure the paper-editor textarea uses the app's UI rhythm */
   .paper-editor-textarea { font-family: var(--font-mono); font-size: 11.5px; }
@@ -247,4 +249,6 @@
   }
   .paper-editor-quote { font-size: 11px; }
   .paper-save-status { font-size: 10px; }
+
+
 </style>

@@ -229,6 +229,7 @@
   let noteEditorRevision = 0;
   let noteEditorPlacement: 'sidebar' | 'popup' | null = null;
   let noteEditorRef: any = null;
+  let popupNoteStatus: 'idle' | 'saving' | 'saved' | 'error' = 'idle';
   const popupPinnedSetterByHighlightId = new Map<string, (flag: boolean) => void>();
 
   async function saveFromEditor(draft: string) {
@@ -1454,7 +1455,16 @@
   <div class="Highlight__popup hp-popup" use:keepPopupInView>
     <div class="hp-section hp-section--actions">
       <div class="hp-row">
-        <p class="hp-label">note</p>
+        <span class="hp-label-group">
+          <span class="hp-label">note</span>
+          {#if popupNoteStatus === 'saving'}
+            <span class="hp-save-dot hp-save-dot--saving" role="status" aria-label="Saving" title="Saving…"></span>
+          {:else if popupNoteStatus === 'saved'}
+            <span class="hp-save-dot hp-save-dot--saved" role="status" aria-label="Saved" title="Saved"></span>
+          {:else if popupNoteStatus === 'error'}
+            <span class="hp-save-dot hp-save-dot--error" role="status" aria-label="Error" title="Unable to save"></span>
+          {/if}
+        </span>
         <button
           type="button"
           class="hp-delete-icon"
@@ -1472,7 +1482,8 @@
           initialContent={getPrimaryNoteForHighlight(highlightId)?.content ?? ''}
           highlight={backendHighlight ?? null}
           onSave={(draft) => savePopupHighlightNote(highlightId, draft)}
-          onClose={() => setPinned?.(false)}
+          onStatusChange={(s) => popupNoteStatus = s}
+          onClose={() => { popupNoteStatus = 'idle'; setPinned?.(false); }}
         />
       </div>
     </div>
@@ -1783,6 +1794,7 @@
 
     /* ── Highlight popup ──────────────────────── */
     .Highlight__popup.hp-popup {
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: stretch !important;
@@ -1795,7 +1807,7 @@
       border: 0.5px solid var(--rule) !important;
       border-radius: 10px;
       box-shadow: var(--shadow-strong) !important;
-      padding: 16px 22px !important;
+      padding: 18px 22px 22px !important;
       overflow-x: hidden;
     }
     .hp-section {
@@ -1827,6 +1839,12 @@
       transition: background 0.12s, color 0.12s;
     }
     .hp-delete-icon:hover { background: rgba(244,63,94,.12); color: #991b1b; }
+    .hp-label-group { display: inline-flex; align-items: center; gap: 8px; }
+    .hp-save-dot { display: inline-block; width: 10px; height: 10px; border-radius: 999px; }
+    .hp-save-dot--saving { background: linear-gradient(90deg,#f59e0b,#fb923c); animation: hp-pulse 1s ease-in-out infinite; }
+    .hp-save-dot--saved { background: #16a34a; }
+    .hp-save-dot--error { background: #be123c; }
+    @keyframes hp-pulse { 0%{ transform: scale(1); opacity: 1 } 50%{ transform: scale(1.35); opacity: .65 } 100%{ transform: scale(1); opacity: 1 } }
     .hp-divider {
       height: 1px;
       background: var(--rule);
