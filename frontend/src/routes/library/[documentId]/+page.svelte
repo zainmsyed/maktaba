@@ -2357,17 +2357,6 @@
       flex-shrink: 0;
     }
 
-    .paper-hl-del-btn {
-      font-size: 12px;
-      color: var(--ink-3);
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      padding: 2px 4px;
-      flex-shrink: 0;
-    }
-    .paper-hl-del-btn:hover { color: #c44040; }
-
     .paper-add-note-btn {
       font-size: 12px !important;
       padding: 3px 8px !important;
@@ -2467,6 +2456,7 @@
       cursor: pointer;
       padding: 2px 4px;
       flex-shrink: 0;
+      margin-left: auto;
     }
     .paper-note-del:hover { color: #c44040; }
 
