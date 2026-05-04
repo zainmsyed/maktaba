@@ -10,6 +10,7 @@ REQUIRED_TABLES = {
     "documents",
     "embeddings",
     "entities",
+    "folders",
     "highlights",
     "jobs",
     "notes",
@@ -25,12 +26,14 @@ EXPECTED_FK_ONDELETE = {
         ("highlight_id",): "CASCADE",
     },
     "jobs": {("document_id",): "CASCADE"},
+    "documents": {("folder_id",): "SET NULL"},
 }
 
 EXPECTED_HIGHLIGHT_COLUMNS = {"highlight_type", "rects"}
 
 EXPECTED_INDEX_SNIPPETS = {
     "idx_documents_deleted": ["USING btree", "deleted_at", "WHERE", "deleted_at IS NULL"],
+    "idx_documents_folder": ["USING btree", "folder_id"],
     "idx_jobs_status": ["USING btree", "status", "WHERE", "pending", "processing"],
     "idx_notes_fts": ["USING gin", "fts"],
     "idx_highlights_fts": ["USING gin", "fts"],

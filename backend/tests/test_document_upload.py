@@ -116,7 +116,7 @@ class DocumentUploadTests(unittest.TestCase):
         with self.db_module.Session(self.db_module.engine) as session:
             session.execute(
                 text(
-                    "TRUNCATE TABLE documents, pages, highlights, notes, embeddings, jobs, config, entities, triples RESTART IDENTITY CASCADE",
+                    "TRUNCATE TABLE documents, pages, highlights, notes, embeddings, jobs, config, entities, triples, folders RESTART IDENTITY CASCADE",
                 ),
             )
             session.commit()

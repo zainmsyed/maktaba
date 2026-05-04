@@ -30,6 +30,30 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class Folder(SQLModel, table=True):
+    __tablename__ = "folders"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(sa_column=Column(Text, nullable=False))
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+        ),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+            onupdate=func.now(),
+        ),
+    )
+
+
 class Document(SQLModel, table=True):
     __tablename__ = "documents"
     __table_args__ = (
@@ -42,6 +66,7 @@ class Document(SQLModel, table=True):
             "deleted_at",
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        Index("idx_documents_folder", "folder_id"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -75,6 +100,10 @@ class Document(SQLModel, table=True):
             nullable=False,
             server_default=text("'{}'::jsonb"),
         ),
+    )
+    folder_id: UUID | None = Field(
+        default=None,
+        sa_column=Column(ForeignKey("folders.id", ondelete="SET NULL"), nullable=True),
     )
     deleted_at: datetime | None = Field(
         default=None,

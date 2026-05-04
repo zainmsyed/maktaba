@@ -29,6 +29,7 @@ def vector_extension_enabled(connection: Connection) -> bool:
 def create_tables(connection: Connection) -> None:
     SQLModel.metadata.create_all(connection)
     ensure_highlight_locator_columns(connection)
+    ensure_folder_columns(connection)
 
 
 def ensure_highlight_locator_columns(connection: Connection) -> None:
@@ -47,6 +48,50 @@ def ensure_highlight_locator_columns(connection: Connection) -> None:
           ) THEN
             ALTER TABLE highlights
               ADD CONSTRAINT ck_highlights_type CHECK (highlight_type IN ('text', 'area'));
+          END IF;
+        END
+        $$;
+        """,
+    )
+
+
+def ensure_folder_columns(connection: Connection) -> None:
+    connection.exec_driver_sql(
+        """
+        CREATE TABLE IF NOT EXISTS folders (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+        """,
+    )
+    connection.exec_driver_sql(
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS folder_id UUID",
+    )
+    connection.exec_driver_sql(
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'fk_documents_folder'
+          ) THEN
+            ALTER TABLE documents
+              ADD CONSTRAINT fk_documents_folder
+              FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL;
+          END IF;
+        END
+        $$;
+        """,
+    )
+    connection.exec_driver_sql(
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_indexes WHERE indexname = 'idx_documents_folder'
+          ) THEN
+            CREATE INDEX idx_documents_folder ON documents(folder_id);
           END IF;
         END
         $$;

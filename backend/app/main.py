@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from app.db import get_session, initialize_database
 from app.uploads import create_document_upload
-from app.models import Document, Job, Page, Highlight, Note, Embedding
+from app.models import Document, Folder, Job, Page, Highlight, Note, Embedding
 
 logger = logging.getLogger("maktaba.api")
 
@@ -70,6 +70,15 @@ def _sanitize_document(doc_obj: object) -> dict[str, object]:
     doc.pop("file_path", None)
     doc.pop("cover_path", None)
     return doc
+
+
+def _serialize_folder(folder: Folder) -> dict[str, object]:
+    return {
+        "id": str(folder.id),
+        "name": folder.name,
+        "created_at": folder.created_at.isoformat() if folder.created_at else None,
+        "updated_at": folder.updated_at.isoformat() if folder.updated_at else None,
+    }
 
 
 def _sanitize_job(job_obj: object) -> dict[str, object]:
@@ -187,16 +196,28 @@ async def upload_document(
 
 
 @app.get("/api/documents")
-def list_documents(session: Session = Depends(get_session)) -> dict[str, object]:
-    """Return all non-deleted documents with their associated jobs.
+def list_documents(
+    folder_id: str | None = None,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    """Return non-deleted documents with their associated jobs.
 
-    The structure mirrors the POST /api/documents response for ease of
-    consumption by the frontend. Jobs are fetched in a single batched query
-    to avoid N+1 query patterns.
+    The structure mirrors the POST /api/documents response. Jobs are fetched
+    in a single batched query to avoid N+1 query patterns. Optionally filter
+    by folder_id; pass folder_id=null for uncategorized documents.
     """
-    docs = session.exec(
-        select(Document).where(Document.deleted_at.is_(None)).order_by(Document.updated_at.desc())
-    ).scalars().all()
+    stmt = select(Document).where(Document.deleted_at.is_(None))
+    if folder_id is not None:
+        if folder_id.lower() in ("null", "none", ""):
+            stmt = stmt.where(Document.folder_id.is_(None))
+        else:
+            try:
+                fid = UUID(folder_id)
+            except ValueError:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid folder_id")
+            stmt = stmt.where(Document.folder_id == fid)
+    stmt = stmt.order_by(Document.updated_at.desc())
+    docs = session.exec(stmt).scalars().all()
 
     result: list[dict[str, object]] = []
 
@@ -262,6 +283,18 @@ class NoteCreate(BaseModel):
 
 class NoteUpdate(BaseModel):
     content: str
+
+
+class FolderCreate(BaseModel):
+    name: str
+
+
+class FolderUpdate(BaseModel):
+    name: str
+
+
+class DocumentUpdate(BaseModel):
+    folder_id: UUID | None = None
 
 
 class SearchResult(BaseModel):
@@ -535,15 +568,48 @@ def search(
         )
     )
 
-    union_stmt = highlight_stmt.union_all(note_stmt).order_by(text("rank DESC")).limit(limit)
+    # Document search by title and authors (no persisted fts; compute on the fly)
+    doc_ts_query = func.plainto_tsquery("english", q.strip())
+    doc_stmt = (
+        select(
+            Document.id,
+            literal("document").label("source_type"),
+            Document.id.label("document_id"),
+            Document.title.label("document_title"),
+            cast(None, Integer).label("page_number"),
+            func.coalesce(Document.title, "").label("content"),
+            cast(None, String).label("highlight_id"),
+            func.ts_rank_cd(
+                func.to_tsvector("english", func.coalesce(Document.title, "") + " " + func.array_to_string(Document.authors, " ")),
+                doc_ts_query,
+            ).label("rank"),
+        )
+        .where(
+            Document.deleted_at.is_(None),
+            func.to_tsvector("english", func.coalesce(Document.title, "") + " " + func.array_to_string(Document.authors, " ")).op("@@")(doc_ts_query),
+        )
+    )
+
+    union_stmt = (
+        highlight_stmt.union_all(note_stmt).union_all(doc_stmt)
+        .order_by(text("rank DESC"))
+        .limit(limit)
+    )
     rows = session.exec(union_stmt).all()
 
     results = []
+    seen_doc_ids = set()
     for row in rows:
+        doc_id = str(row.document_id)
+        # deduplicate document results so a document only appears once
+        if row.source_type == "document" and doc_id in seen_doc_ids:
+            continue
+        if row.source_type == "document":
+            seen_doc_ids.add(doc_id)
         results.append({
             "id": str(row.id),
             "source_type": row.source_type,
-            "document_id": str(row.document_id),
+            "document_id": doc_id,
             "document_title": row.document_title,
             "page_number": row.page_number,
             "content": row.content,
@@ -564,6 +630,87 @@ def delete_highlight(highlight_id: UUID, session: Session = Depends(get_session)
     # older database was created before the ON DELETE CASCADE constraint existed.
     session.execute(sa_delete(Note).where(Note.highlight_id == highlight_id))
     session.delete(h)
+    session.commit()
+    return {"deleted": True}
+
+
+@app.patch("/api/documents/{document_id}")
+def update_document(
+    document_id: UUID,
+    payload: DocumentUpdate = Body(...),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    doc = session.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    if payload.folder_id is not None:
+        folder = session.get(Folder, payload.folder_id)
+        if folder is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found")
+        doc.folder_id = payload.folder_id
+    else:
+        doc.folder_id = None
+
+    session.add(doc)
+    session.commit()
+    session.refresh(doc)
+    return {"document": _sanitize_document(doc)}
+
+
+@app.get("/api/folders")
+def list_folders(session: Session = Depends(get_session)) -> dict[str, object]:
+    folders = session.exec(select(Folder).order_by(Folder.name)).scalars().all()
+    return {"folders": [_serialize_folder(f) for f in folders]}
+
+
+@app.post("/api/folders")
+def create_folder(
+    response: Response,
+    payload: FolderCreate = Body(...),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Folder name is required")
+    folder = Folder(name=name)
+    session.add(folder)
+    session.commit()
+    session.refresh(folder)
+    response.status_code = status.HTTP_201_CREATED
+    return {"folder": _serialize_folder(folder)}
+
+
+@app.patch("/api/folders/{folder_id}")
+def update_folder(
+    folder_id: UUID,
+    payload: FolderUpdate = Body(...),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    folder = session.get(Folder, folder_id)
+    if folder is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Folder name is required")
+    folder.name = name
+    session.add(folder)
+    session.commit()
+    session.refresh(folder)
+    return {"folder": _serialize_folder(folder)}
+
+
+@app.delete("/api/folders/{folder_id}")
+def delete_folder(folder_id: UUID, session: Session = Depends(get_session)) -> dict[str, object]:
+    folder = session.get(Folder, folder_id)
+    if folder is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found")
+    # unset folder_id on related documents
+    from sqlalchemy import update as sa_update
+    session.execute(
+        sa_update(Document).where(Document.folder_id == folder_id).values(folder_id=None)
+    )
+    session.delete(folder)
     session.commit()
     return {"deleted": True}
 

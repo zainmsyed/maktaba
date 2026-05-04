@@ -9,6 +9,8 @@
 
   type DocumentModel = any;
   type JobModel = any;
+  type FolderModel = { id: string; name: string };
+
   interface DocWithJobs {
     document: DocumentModel;
     jobs: JobModel[];
@@ -28,11 +30,20 @@
   let sortMode: SortMode = 'date_added';
   let pollTimer: number | null = null;
 
+  // Folder state
+  let folders: FolderModel[] = [];
+  let selectedFolderId: string | null = 'all';
+  let newFolderName = '';
+  let creatingFolder = false;
+  let moveMenuDocId: string | null = null;
+  let renamingFolderId: string | null = null;
+  let renameFolderValue = '';
+
   // Search state
   let searchQuery = '';
   let searchResults: Array<{
     id: string;
-    source_type: 'highlight' | 'note';
+    source_type: 'highlight' | 'note' | 'document';
     document_id: string;
     document_title: string | null;
     page_number: number | null;
@@ -94,7 +105,10 @@
   function handleResultClick(result: typeof searchResults[0]) {
     clearSearch();
     if (!result.document_id) return;
-    // Navigate to reader; explicit search targets should override normal progress restoration.
+    if (result.source_type === 'document') {
+      void goto('/library/' + result.document_id);
+      return;
+    }
     const url = new URL(`/library/${result.document_id}`, window.location.href);
     const highlightId = result.highlight_id || (result.source_type === 'highlight' ? result.id : null);
     if (highlightId) {
@@ -125,7 +139,11 @@
       error = null;
     }
     try {
-      const resp = await fetch(`${apiUrl}/api/documents`);
+      let url = `${apiUrl}/api/documents`;
+      if (selectedFolderId && selectedFolderId !== 'all') {
+        url += `?folder_id=${selectedFolderId === 'uncategorized' ? 'null' : selectedFolderId}`;
+      }
+      const resp = await fetch(url);
       if (!resp.ok) {
         throw new Error(`HTTP ${resp.status}`);
       }
@@ -149,8 +167,20 @@
     }
   }
 
+  async function loadFolders() {
+    try {
+      const resp = await fetch(`${apiUrl}/api/folders`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const payload = await resp.json();
+      folders = payload.folders || [];
+    } catch (e) {
+      console.error('Failed to load folders', e);
+    }
+  }
+
   onMount(() => {
     loadDocuments();
+    loadFolders();
   });
 
   onDestroy(() => {
@@ -184,7 +214,6 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         return {
-          // Use the user's current position, not furthest reached page.
           page: Number(parsed.lastPage) || Number(parsed.page) || Number(parsed.maxPage) || 0,
           total: Number(parsed.total) || 1,
         };
@@ -260,10 +289,8 @@
     return documentSortComparators[mode](a, b);
   }
 
-  // derive a sorted array reactively so Svelte change detection is reliable
   $: sortedDocuments = [...documents].sort((a, b) => sortDocuments(a, b, sortMode));
 
-  // trigger polling decisions whenever documents change
   $: {
     const hasProcessing = documents.some((d) => jobStatus(d.jobs) === 'processing');
     if (hasProcessing && pollTimer === null) {
@@ -358,7 +385,6 @@
     documents = documents.filter((d) => (d.document?.id ?? d.localId) !== id);
   }
 
-  // fallow-ignore-next-line complexity
   async function deleteDocument(entry: DocWithJobs) {
     const id = entry?.document?.id;
     if (!id) return;
@@ -375,6 +401,93 @@
       alert('Failed to delete document: ' + (e instanceof Error ? e.message : String(e)));
     }
   }
+
+  // Folder actions
+  async function createFolder() {
+    const name = newFolderName.trim();
+    if (!name) return;
+    try {
+      const resp = await fetch(`${apiUrl}/api/folders`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const payload = await resp.json();
+      folders = [...folders, payload.folder];
+      newFolderName = '';
+      creatingFolder = false;
+    } catch (e) {
+      alert('Failed to create folder: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  async function renameFolder(folderId: string) {
+    const name = renameFolderValue.trim();
+    if (!name) return;
+    try {
+      const resp = await fetch(`${apiUrl}/api/folders/${folderId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const payload = await resp.json();
+      folders = folders.map((f) => (f.id === folderId ? payload.folder : f));
+      renamingFolderId = null;
+      renameFolderValue = '';
+    } catch (e) {
+      alert('Failed to rename folder: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  async function deleteFolder(folderId: string) {
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder) return;
+    if (!confirm(`Delete folder "${folder.name}"? Documents inside will become uncategorized.`)) return;
+    try {
+      const resp = await fetch(`${apiUrl}/api/folders/${folderId}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      folders = folders.filter((f) => f.id !== folderId);
+      if (selectedFolderId === folderId) {
+        selectedFolderId = 'all';
+        loadDocuments();
+      }
+      // Also refresh documents in case any were in this folder
+      loadDocuments({ silent: true });
+    } catch (e) {
+      alert('Failed to delete folder: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  async function moveDocumentToFolder(docId: string, folderId: string | null) {
+    try {
+      const payload: any = { folder_id: folderId };
+      const resp = await fetch(`${apiUrl}/api/documents/${docId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      moveMenuDocId = null;
+      // If we're inside a folder filter, the doc may disappear
+      loadDocuments({ silent: true });
+    } catch (e) {
+      alert('Failed to move document: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  function selectFolder(folderId: string | null) {
+    selectedFolderId = folderId;
+    loadDocuments();
+  }
+
+  function folderNameById(id: string | null): string {
+    if (id === 'all') return 'All documents';
+    if (id === 'uncategorized') return 'Uncategorized';
+    const f = folders.find((fo) => fo.id === id);
+    return f?.name ?? 'Folder';
+  }
 </script>
 
 <svelte:head>
@@ -385,153 +498,256 @@
 
 <main class="library-page">
   <div class="library-shell">
-    <header class="topbar">
-      <div class="topbar-left">
-        <span class="wordmark">maktaba</span>
-        <nav class="nav-links" aria-label="Primary">
-          <a class="nav-link active" href="/library">library</a>
-          <a class="nav-link" href="/library/demo" on:click|preventDefault={goToLastReading}>reading</a>
-        </nav>
+    <aside class="folder-sidebar">
+      <div class="folder-header">
+        <span class="folder-title">Folders</span>
+        <button type="button" class="folder-new-btn" on:click={() => { creatingFolder = true; newFolderName = ''; }} title="New folder">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
       </div>
 
-      <div class="search-wrap">
-        <div class="search-box" class:search-box--active={searchOpen || searchQuery.length > 0}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      {#if creatingFolder}
+        <div class="folder-create-row">
           <input
-            type="search"
-            class="search-input"
-            placeholder="Search notes and highlights…"
-            aria-label="Search notes and highlights"
-            bind:value={searchQuery}
-            on:input={debouncedSearch}
-            on:keydown={(e) => { if (e.key === 'Escape') clearSearch(); }}
+            type="text"
+            class="folder-create-input"
+            placeholder="Folder name"
+            bind:value={newFolderName}
+            on:keydown={(e) => { if (e.key === 'Enter') createFolder(); if (e.key === 'Escape') { creatingFolder = false; newFolderName = ''; } }}
+            autofocus
           />
-          {#if searchLoading}
-            <span class="search-spinner" aria-hidden="true">⟳</span>
-          {/if}
-        </div>
-        {#if searchOpen}
-          <div class="search-panel" role="listbox" aria-label="Search results">
-            {#if searchError}
-              <div class="search-error">{searchError}</div>
-            {:else if searchResults.length === 0}
-              <div class="search-empty">No results for “{searchQuery}”</div>
-            {:else}
-              {#each searchResults as result (result.id)}
-                <button
-                  type="button"
-                  class="search-result"
-                  role="option"
-                  aria-selected="false"
-                  on:click={() => handleResultClick(result)}
-                >
-                  <span class="search-result-type">{result.source_type}</span>
-                  <span class="search-result-title">{result.document_title ?? 'Untitled'}</span>
-                  {#if result.page_number}
-                    <span class="search-result-page">{result.page_number}</span>
-                  {/if}
-                  <p class="search-result-snippet">{result.content}</p>
-                </button>
-              {/each}
-            {/if}
-          </div>
-        {/if}
-      </div>
-
-    </header>
-
-    <section class="library-view">
-      <div class="library-toolbar">
-        <p class="library-summary">{sortedDocuments.length} documents</p>
-
-        <div class="library-header-actions">
-          <label class="upload-btn paper-btn-accent">
-            <input type="file" accept=".pdf,.epub" class="sr-only" on:change={onFileChange} />
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="17 8 12 3 7 8"></polyline>
-              <line x1="12" x2="12" y1="3" y2="15"></line>
-            </svg>
-            Upload
-          </label>
-
-          <div class="sort-control">
-            <label for="library-sort" class="sort-label">Sort</label>
-            <select id="library-sort" bind:value={sortMode} class="sort-select">
-              <option value="last_opened">Last opened</option>
-              <option value="date_added">Date added</option>
-              <option value="title">Title</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {#if loading}
-        <div class="library-state">Loading library…</div>
-      {:else if error}
-        <div class="library-state error">{error}</div>
-      {:else if documents.length === 0}
-        <div class="library-state">No documents yet - upload a PDF or EPUB to get started.</div>
-      {:else}
-        <div class="books-grid">
-          {#each sortedDocuments as entry (entry.document.id ?? entry.localId)}
-            {@const href = readerHref(entry.document)}
-            <svelte:element this={href ? 'a' : 'article'} {href} class="book-card">
-              <div class="book-card-body">
-                <div class="book-card-head">
-                  <h2 class="book-card-title">{entry.document.title ?? 'Untitled'}</h2>
-                  {#if statusTone(entry) === 'emerald'}
-                    <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  {:else if statusTone(entry) === 'amber'}
-                    <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                  {:else if statusTone(entry) === 'rose'}
-                    <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  {/if}
-                </div>
-                <p class="book-card-author">
-                  {#if entry.document.authors && entry.document.authors.length > 0}
-                    {entry.document.authors.join(', ')}
-                  {:else}
-                    Unknown author
-                  {/if}
-                </p>
-                <div class="book-progress-row">
-                  <div class="book-prog-bar">
-                    <div class="book-prog-fill" class:book-prog-fill--complete={progressComplete(entry)} style={`width: ${progressWidth(entry)}%`}></div>
-                  </div>
-                  <span class="book-prog-label">{progressLabel(entry)}</span>
-                </div>
-                <div class="book-card-footer">
-                  <span class="book-card-date">{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</span>
-                </div>
-                <div class="book-card-actions">
-                  {#if entry.highlight_count || entry.note_count}
-                    <div class="book-card-stats">
-                      {#if entry.highlight_count}
-                        <span class="book-stat" title="{entry.highlight_count} highlights">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/><path d="M15 3h6v6"/></svg>
-                          {entry.highlight_count}
-                        </span>
-                      {/if}
-                      {#if entry.note_count}
-                        <span class="book-stat" title="{entry.note_count} notes">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                          {entry.note_count}
-                        </span>
-                      {/if}
-                    </div>
-                  {/if}
-
-                  <button type="button" class="delete-btn push-right" on:click|preventDefault|stopPropagation={() => deleteDocument(entry)} title="Delete">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                  </button>
-                </div>
-              </div>
-            </svelte:element>
-          {/each}
+          <button type="button" class="folder-create-ok" on:click={createFolder}>Add</button>
         </div>
       {/if}
-    </section>
+
+      <button
+        type="button"
+        class="folder-item"
+        class:active={selectedFolderId === 'all'}
+        on:click={() => selectFolder('all')}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        All documents
+      </button>
+
+      <button
+        type="button"
+        class="folder-item"
+        class:active={selectedFolderId === 'uncategorized'}
+        on:click={() => selectFolder('uncategorized')}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Uncategorized
+      </button>
+
+      {#each folders as folder (folder.id)}
+        {#if renamingFolderId === folder.id}
+          <div class="folder-create-row">
+            <input
+              type="text"
+              class="folder-create-input"
+              bind:value={renameFolderValue}
+              on:keydown={(e) => { if (e.key === 'Enter') renameFolder(folder.id); if (e.key === 'Escape') { renamingFolderId = null; renameFolderValue = ''; } }}
+              autofocus
+            />
+            <button type="button" class="folder-create-ok" on:click={() => renameFolder(folder.id)}>Save</button>
+          </div>
+        {:else}
+          <div class="folder-item-wrap">
+            <button
+              type="button"
+              class="folder-item"
+              class:active={selectedFolderId === folder.id}
+              on:click={() => selectFolder(folder.id)}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              {folder.name}
+            </button>
+            <div class="folder-actions">
+              <button type="button" class="folder-action-btn" on:click|stopPropagation={() => { renamingFolderId = folder.id; renameFolderValue = folder.name; }} title="Rename">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button type="button" class="folder-action-btn" on:click|stopPropagation={() => deleteFolder(folder.id)} title="Delete">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+          </div>
+        {/if}
+      {/each}
+    </aside>
+
+    <div class="library-main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <span class="wordmark">maktaba</span>
+          <nav class="nav-links" aria-label="Primary">
+            <a class="nav-link active" href="/library">library</a>
+            <a class="nav-link" href="/library/demo" on:click|preventDefault={goToLastReading}>reading</a>
+          </nav>
+        </div>
+
+        <div class="search-wrap">
+          <div class="search-box" class:search-box--active={searchOpen || searchQuery.length > 0}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Search notes, highlights, and documents…"
+              aria-label="Search notes, highlights, and documents"
+              bind:value={searchQuery}
+              on:input={debouncedSearch}
+              on:keydown={(e) => { if (e.key === 'Escape') clearSearch(); }}
+            />
+            {#if searchLoading}
+              <span class="search-spinner" aria-hidden="true">⟳</span>
+            {/if}
+          </div>
+          {#if searchOpen}
+            <div class="search-panel" role="listbox" aria-label="Search results">
+              {#if searchError}
+                <div class="search-error">{searchError}</div>
+              {:else if searchResults.length === 0}
+                <div class="search-empty">No results for "{searchQuery}"</div>
+              {:else}
+                {#each searchResults as result (result.id)}
+                  <button
+                    type="button"
+                    class="search-result"
+                    role="option"
+                    aria-selected="false"
+                    on:click={() => handleResultClick(result)}
+                  >
+                    <span class="search-result-type">{result.source_type}</span>
+                    <span class="search-result-title">{result.document_title ?? 'Untitled'}</span>
+                    {#if result.page_number}
+                      <span class="search-result-page">{result.page_number}</span>
+                    {/if}
+                    <p class="search-result-snippet">{result.content}</p>
+                  </button>
+                {/each}
+              {/if}
+            </div>
+          {/if}
+        </div>
+      </header>
+
+      <section class="library-view">
+        {#if selectedFolderId !== 'all'}
+          <div class="folder-chip">
+            <span class="folder-chip-label">{folderNameById(selectedFolderId)}</span>
+            <button type="button" class="folder-chip-clear" on:click={() => selectFolder('all')}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        {/if}
+
+        <div class="library-toolbar">
+          <p class="library-summary">{sortedDocuments.length} documents</p>
+
+          <div class="library-header-actions">
+            <label class="upload-btn paper-btn-accent">
+              <input type="file" accept=".pdf,.epub" class="sr-only" on:change={onFileChange} />
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" x2="12" y1="3" y2="15"></line>
+              </svg>
+              Upload
+            </label>
+
+            <div class="sort-control">
+              <label for="library-sort" class="sort-label">Sort</label>
+              <select id="library-sort" bind:value={sortMode} class="sort-select">
+                <option value="last_opened">Last opened</option>
+                <option value="date_added">Date added</option>
+                <option value="title">Title</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {#if loading}
+          <div class="library-state">Loading library…</div>
+        {:else if error}
+          <div class="library-state error">{error}</div>
+        {:else if documents.length === 0}
+          <div class="library-state">No documents yet — upload a PDF or EPUB to get started.</div>
+        {:else}
+          <div class="books-grid">
+            {#each sortedDocuments as entry (entry.document.id ?? entry.localId)}
+              {@const href = readerHref(entry.document)}
+              <svelte:element this={href ? 'a' : 'article'} {href} class="book-card">
+                <div class="book-card-body">
+                  <div class="book-card-head">
+                    <h2 class="book-card-title">{entry.document.title ?? 'Untitled'}</h2>
+                    {#if statusTone(entry) === 'emerald'}
+                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    {:else if statusTone(entry) === 'amber'}
+                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                    {:else if statusTone(entry) === 'rose'}
+                      <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    {/if}
+                  </div>
+                  <p class="book-card-author">
+                    {#if entry.document.authors && entry.document.authors.length > 0}
+                      {entry.document.authors.join(', ')}
+                    {:else}
+                      Unknown author
+                    {/if}
+                  </p>
+                  <div class="book-progress-row">
+                    <div class="book-prog-bar">
+                      <div class="book-prog-fill" class:book-prog-fill--complete={progressComplete(entry)} style={`width: ${progressWidth(entry)}%`}></div>
+                    </div>
+                    <span class="book-prog-label">{progressLabel(entry)}</span>
+                  </div>
+                  <div class="book-card-footer">
+                    <span class="book-card-date">{humanFormatDate(entry.document.created_at ?? entry.document.createdAt)}</span>
+                  </div>
+                  <div class="book-card-actions">
+                    {#if entry.highlight_count || entry.note_count}
+                      <div class="book-card-stats">
+                        {#if entry.highlight_count}
+                          <span class="book-stat" title="{entry.highlight_count} highlights">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/><path d="M15 3h6v6"/></svg>
+                            {entry.highlight_count}
+                          </span>
+                        {/if}
+                        {#if entry.note_count}
+                          <span class="book-stat" title="{entry.note_count} notes">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            {entry.note_count}
+                          </span>
+                        {/if}
+                      </div>
+                    {/if}
+
+                    <div class="doc-actions">
+                      <button type="button" class="move-btn" on:click|preventDefault|stopPropagation={() => { moveMenuDocId = entry.document.id; }} title="Move to folder">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                      </button>
+                      {#if moveMenuDocId === entry.document.id}
+                        <div class="move-menu">
+                          <div class="move-menu-header">Move to</div>
+                          <button type="button" class="move-menu-item" on:click|preventDefault|stopPropagation={() => moveDocumentToFolder(entry.document.id, null)}>Uncategorized</button>
+                          {#each folders as f}
+                            <button type="button" class="move-menu-item" on:click|preventDefault|stopPropagation={() => moveDocumentToFolder(entry.document.id, f.id)}>{f.name}</button>
+                          {/each}
+                          <button type="button" class="move-menu-cancel" on:click|preventDefault|stopPropagation={() => moveMenuDocId = null}>Cancel</button>
+                        </div>
+                      {/if}
+                      <button type="button" class="delete-btn push-right" on:click|preventDefault|stopPropagation={() => deleteDocument(entry)} title="Delete">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </svelte:element>
+            {/each}
+          </div>
+        {/if}
+      </section>
+    </div>
   </div>
 </main>
 
@@ -547,8 +763,151 @@
   .library-shell {
     min-height: 100vh;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     background: transparent;
+  }
+
+  .folder-sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--rule);
+    background: var(--panel-bg);
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .folder-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px 8px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 6px;
+  }
+
+  .folder-title {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: var(--ink-3);
+    text-transform: uppercase;
+  }
+
+  .folder-new-btn {
+    background: transparent;
+    border: none;
+    color: var(--ink-3);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .folder-new-btn:hover {
+    background: var(--paper-2);
+    color: var(--ink);
+  }
+
+  .folder-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 13px;
+    font-weight: 400;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: background 0.12s;
+  }
+  .folder-item:hover,
+  .folder-item.active {
+    background: var(--paper-2);
+  }
+  .folder-item.active {
+    font-weight: 500;
+  }
+
+  .folder-item-wrap {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    position: relative;
+  }
+  .folder-item-wrap:hover .folder-actions {
+    opacity: 1;
+  }
+
+  .folder-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .folder-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--ink-3);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .folder-action-btn:hover {
+    background: var(--paper-2);
+    color: var(--ink);
+  }
+
+  .folder-create-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+  }
+
+  .folder-create-input {
+    flex: 1;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--panel-bg-strong);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 13px;
+    padding: 5px 8px;
+    outline: none;
+  }
+
+  .folder-create-ok {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-family: var(--font-serif);
+    cursor: pointer;
+  }
+  .folder-create-ok:hover {
+    opacity: 0.9;
+  }
+
+  .library-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .topbar {
@@ -789,6 +1148,36 @@
     padding: 22px clamp(18px, 3vw, 40px) 30px;
   }
 
+  .folder-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    margin-bottom: 12px;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  .folder-chip-clear {
+    background: transparent;
+    border: none;
+    color: var(--ink-3);
+    cursor: pointer;
+    padding: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .folder-chip-clear:hover {
+    background: rgba(0,0,0,0.06);
+    color: var(--ink);
+  }
+
   .library-toolbar {
     display: flex;
     align-items: center;
@@ -910,6 +1299,85 @@
     background: rgba(196,64,64,0.08);
   }
 
+  .move-btn {
+    background: transparent;
+    border: none;
+    padding: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--ink-3);
+  }
+  .move-btn:hover {
+    background: var(--paper-2);
+    color: var(--ink);
+  }
+
+  .doc-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+  }
+
+  .move-menu {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    right: 0;
+    z-index: 40;
+    background: var(--panel-bg-strong);
+    border: 0.5px solid var(--rule);
+    border-radius: 10px;
+    box-shadow: var(--shadow-strong);
+    min-width: 160px;
+    padding: 6px 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .move-menu-header {
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 4px;
+  }
+
+  .move-menu-item {
+    padding: 7px 12px;
+    background: transparent;
+    border: none;
+    text-align: left;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .move-menu-item:hover {
+    background: var(--paper-2);
+  }
+
+  .move-menu-cancel {
+    padding: 7px 12px;
+    background: transparent;
+    border: none;
+    text-align: left;
+    font-family: var(--font-serif);
+    font-size: 12px;
+    color: var(--ink-3);
+    cursor: pointer;
+    border-top: 1px solid var(--rule);
+    margin-top: 4px;
+  }
+  .move-menu-cancel:hover {
+    color: var(--ink);
+  }
+
   .book-progress-row {
     display: flex;
     align-items: center;
@@ -984,34 +1452,38 @@
   }
 
   @media (max-width: 768px) {
-    .topbar {
+    .library-shell {
       flex-direction: column;
-      align-items: stretch;
     }
-
-    .topbar-left,
-    .library-header-actions {
+    .folder-sidebar {
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid var(--rule);
+      flex-direction: row;
       flex-wrap: wrap;
-      justify-content: space-between;
+      padding: 10px 14px;
     }
-
+    .folder-header {
+      width: 100%;
+      margin-bottom: 6px;
+    }
+    .folder-item-wrap {
+      flex: 1;
+      min-width: 120px;
+    }
     .topbar {
       grid-template-columns: 1fr;
     }
-
     .search-wrap {
       max-width: none;
     }
-
     .library-toolbar {
       flex-direction: column;
       align-items: flex-start;
     }
-
     .library-header-actions {
       justify-content: flex-start;
     }
-
     .books-grid {
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     }
