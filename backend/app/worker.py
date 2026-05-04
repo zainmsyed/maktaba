@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from sqlmodel import Session, select
@@ -10,12 +12,14 @@ from sqlmodel import Session, select
 from app.db import engine
 from app.models import Job, Document, Page
 from app.extract import extract_text_and_fallback
+from app.paths import resolve_data_file_path
 
 
 logger = logging.getLogger("maktaba.worker")
 logging.basicConfig(level=logging.INFO)
 
 SLEEP_SECONDS = 2.0
+DATA_DIR = Path(os.getenv("DATA_DIR", "/data")).resolve()
 
 
 def _claim_job(session: Session) -> Optional[Job]:
@@ -49,12 +53,14 @@ def process_extract_job(session: Session, job: Job) -> None:
             session.commit()
             return
 
-        pdf_path = doc.file_path
+        pdf_path = resolve_data_file_path(doc.file_path, DATA_DIR)
+        if pdf_path is None:
+            raise RuntimeError(f"document file not found: {doc.file_path}")
         logger.info("Processing extract_text job %s for document %s", job.id, doc.id)
 
         # Iterate pages and persist Page rows
         pages_to_add = []
-        for page_number, text, ocr_used in extract_text_and_fallback(pdf_path):
+        for page_number, text, ocr_used in extract_text_and_fallback(str(pdf_path)):
             p = Page(
                 document_id=doc.id,
                 page_number=page_number,

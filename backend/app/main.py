@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from app.db import get_session, initialize_database
 from app.uploads import create_document_upload
 from app.models import Document, Folder, Job, Page, Highlight, Note, Embedding
+from app.paths import resolve_data_file_path
 
 logger = logging.getLogger("maktaba.api")
 
@@ -117,25 +118,9 @@ def health() -> dict[str, object]:
 
 
 def resolve_document_file_path(stored_file_path: str) -> Path | None:
-    # Try the stored path first (usually absolute inside the container), then
-    # fall back to resolving Docker-style /data/... paths under DATA_DIR for
-    # local dev setups where the backend runs outside Docker.
-    stored_path = Path(stored_file_path)
-    candidates = [stored_path]
-    if stored_path.is_absolute():
-        try:
-            candidates.append(DATA_DIR / stored_path.relative_to("/data"))
-        except ValueError:
-            relative = stored_path.relative_to(stored_path.anchor) if stored_path.anchor else stored_path
-            candidates.append(DATA_DIR / relative)
-    else:
-        candidates.append(DATA_DIR / stored_path)
-
-    for candidate in candidates:
-        logger.info("Checking file path candidate: %s (exists=%s)", candidate, candidate.is_file())
-        if candidate.is_file():
-            return candidate
-    return None
+    file_path = resolve_data_file_path(stored_file_path, DATA_DIR)
+    logger.info("Resolved document file path %s -> %s", stored_file_path, file_path)
+    return file_path
 
 
 @app.get("/api/documents/{document_id}/file")
