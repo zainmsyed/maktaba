@@ -1,9 +1,9 @@
 # Story 022: Library folders and document search
 
-**Status:** in-progress  
+**Status:** complete  
 **Created:** 2026-05-03
 **Last accessed:** 2026-05-04  
-**Completed:** —
+**Completed:** 2026-05-04
 
 ---
 
