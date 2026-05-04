@@ -46,8 +46,8 @@ Add EPUB rendering and CFI highlights, then bring in Kindle and Kobo/KOReader im
 Stories: 013, 014, 015, 016, 017
 
 ### Feature 5: Polish and lifecycle
-Add themes, shortcuts, reading progress, soft delete, Calibre scan, and backup/export.
-Stories: 018, 019, 020, 021
+Add themes, shortcuts, reading progress, soft delete, Calibre scan, backup/export, folders, and document search.
+Stories: 018, 019, 020, 021, 022
 
 ## Story queue
 | Story | Title | Status | Blocks |
@@ -73,6 +73,7 @@ Stories: 018, 019, 020, 021
 | 019 | Add document deletion, soft delete, and recovery window behavior | Not started | 004, 008 |
 | 020 | Scan Calibre libraries for bulk import | Not started | 003, 013 |
 | 021 | Export backups for notes and highlights | Not started | 008, 014, 019 |
+| 022 | Library folders and document search | Not started | 004, 010 |
 
 ## Replanning log
 - 2026-04-24: Initial MVP/v1 plan created from the PRD, reference UI, and user clarifications. Scope includes all pre-AI milestones (M1–M5), with desktop/laptop focus, PDF-first sequencing, EPUB still inside MVP, and thumbnails/mobile excluded.
