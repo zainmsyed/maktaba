@@ -178,12 +178,20 @@
     }
   }
 
+  function closeMoveMenuOnOutsideClick(event: MouseEvent) {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-move-menu-root]')) return;
+    moveMenuDocId = null;
+  }
+
   onMount(() => {
     loadDocuments();
     loadFolders();
+    window.addEventListener('click', closeMoveMenuOnOutsideClick);
   });
 
   onDestroy(() => {
+    window.removeEventListener('click', closeMoveMenuOnOutsideClick);
     if (pollTimer !== null) {
       clearInterval(pollTimer);
       pollTimer = null;
@@ -444,7 +452,7 @@
   async function deleteFolder(folderId: string) {
     const folder = folders.find((f) => f.id === folderId);
     if (!folder) return;
-    if (!confirm(`Delete folder "${folder.name}"? Documents inside will become uncategorized.`)) return;
+    if (!confirm(`Delete folder "${folder.name}"? Documents inside will be removed from the folder.`)) return;
     try {
       const resp = await fetch(`${apiUrl}/api/folders/${folderId}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -484,7 +492,6 @@
 
   function folderNameById(id: string | null): string {
     if (id === 'all') return 'All documents';
-    if (id === 'uncategorized') return 'Uncategorized';
     const f = folders.find((fo) => fo.id === id);
     return f?.name ?? 'Folder';
   }
@@ -528,16 +535,6 @@
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         All documents
-      </button>
-
-      <button
-        type="button"
-        class="folder-item"
-        class:active={selectedFolderId === 'uncategorized'}
-        on:click={() => selectFolder('uncategorized')}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        Uncategorized
       </button>
 
       {#each folders as folder (folder.id)}
@@ -676,7 +673,7 @@
           <div class="books-grid">
             {#each sortedDocuments as entry (entry.document.id ?? entry.localId)}
               {@const href = readerHref(entry.document)}
-              <svelte:element this={href ? 'a' : 'article'} {href} class="book-card">
+              <svelte:element this={href ? 'a' : 'article'} {href} class="book-card" class:book-card--menu-open={moveMenuDocId === entry.document.id}>
                 <div class="book-card-body">
                   <div class="book-card-head">
                     <h2 class="book-card-title">{entry.document.title ?? 'Untitled'}</h2>
@@ -722,14 +719,14 @@
                       </div>
                     {/if}
 
-                    <div class="doc-actions">
+                    <div class="doc-actions" data-move-menu-root>
                       <button type="button" class="move-btn" on:click|preventDefault|stopPropagation={() => { moveMenuDocId = entry.document.id; }} title="Move to folder">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                       </button>
                       {#if moveMenuDocId === entry.document.id}
                         <div class="move-menu">
                           <div class="move-menu-header">Move to</div>
-                          <button type="button" class="move-menu-item" on:click|preventDefault|stopPropagation={() => moveDocumentToFolder(entry.document.id, null)}>Uncategorized</button>
+                          <button type="button" class="move-menu-item" on:click|preventDefault|stopPropagation={() => moveDocumentToFolder(entry.document.id, null)}>No folder</button>
                           {#each folders as f}
                             <button type="button" class="move-menu-item" on:click|preventDefault|stopPropagation={() => moveDocumentToFolder(entry.document.id, f.id)}>{f.name}</button>
                           {/each}
@@ -911,6 +908,8 @@
   }
 
   .topbar {
+    position: relative;
+    z-index: 100;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(280px, 420px) minmax(0, 1fr);
     align-items: center;
@@ -1225,8 +1224,9 @@
   .book-card {
     display: flex;
     flex-direction: column;
+    position: relative;
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible;
     background: var(--panel-bg-strong);
     border: 1px solid var(--rule);
     box-shadow: var(--shadow-soft);
@@ -1239,6 +1239,10 @@
   .book-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-strong);
+  }
+
+  .book-card--menu-open {
+    z-index: 20;
   }
 
   .book-card-body {
@@ -1320,6 +1324,7 @@
     align-items: center;
     gap: 4px;
     position: relative;
+    margin-left: auto;
   }
 
   .move-menu {
@@ -1431,7 +1436,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    margin-top: 2px;
+    margin-top: auto;
   }
 
   .book-card-stats {

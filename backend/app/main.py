@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
-from sqlalchemy import delete as sa_delete, func, select, text, literal, cast, String
+from sqlalchemy import delete as sa_delete, func, select, text, literal, cast, String, Integer, union_all, or_
 from pydantic import BaseModel
 
 from app.db import get_session, initialize_database
@@ -139,9 +139,13 @@ def stream_document_file(
     stored_path = Path(document.file_path)
     candidates = [stored_path]
     if stored_path.is_absolute():
-        # e.g. /data/pdfs/abc.pdf → resolve under DATA_DIR/pdfs/abc.pdf
-        relative = stored_path.relative_to(stored_path.anchor) if stored_path.anchor else stored_path
-        candidates.append(DATA_DIR / relative)
+        # e.g. /data/pdfs/abc.pdf inside Docker → ./data/pdfs/abc.pdf when
+        # running the backend directly on the host with DATA_DIR=./data.
+        try:
+            candidates.append(DATA_DIR / stored_path.relative_to("/data"))
+        except ValueError:
+            relative = stored_path.relative_to(stored_path.anchor) if stored_path.anchor else stored_path
+            candidates.append(DATA_DIR / relative)
     else:
         candidates.append(DATA_DIR / stored_path)
 
@@ -570,6 +574,9 @@ def search(
 
     # Document search by title and authors (no persisted fts; compute on the fly)
     doc_ts_query = func.plainto_tsquery("english", q.strip())
+    doc_text = func.coalesce(Document.title, "") + " " + func.coalesce(func.array_to_string(Document.authors, " "), "")
+    doc_fts = func.to_tsvector("english", doc_text)
+    doc_like = f"%{q.strip()}%"
     doc_stmt = (
         select(
             Document.id,
@@ -579,19 +586,20 @@ def search(
             cast(None, Integer).label("page_number"),
             func.coalesce(Document.title, "").label("content"),
             cast(None, String).label("highlight_id"),
-            func.ts_rank_cd(
-                func.to_tsvector("english", func.coalesce(Document.title, "") + " " + func.array_to_string(Document.authors, " ")),
-                doc_ts_query,
-            ).label("rank"),
+            func.greatest(func.ts_rank_cd(doc_fts, doc_ts_query), literal(0.05)).label("rank"),
         )
         .where(
             Document.deleted_at.is_(None),
-            func.to_tsvector("english", func.coalesce(Document.title, "") + " " + func.array_to_string(Document.authors, " ")).op("@@")(doc_ts_query),
+            or_(
+                doc_fts.op("@@")(doc_ts_query),
+                Document.title.ilike(doc_like),
+                func.array_to_string(Document.authors, " ").ilike(doc_like),
+            ),
         )
     )
 
     union_stmt = (
-        highlight_stmt.union_all(note_stmt).union_all(doc_stmt)
+        union_all(highlight_stmt, note_stmt, doc_stmt)
         .order_by(text("rank DESC"))
         .limit(limit)
     )
