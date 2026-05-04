@@ -772,12 +772,12 @@ def delete_document(document_id: UUID, session: Session = Depends(get_session)) 
     # remove files on disk if possible; ignore errors
     try:
         if doc.file_path:
-            p = Path(doc.file_path)
-            if p.exists():
+            p = resolve_document_file_path(doc.file_path)
+            if p is not None:
                 p.unlink()
         if getattr(doc, "cover_path", None):
-            cp = Path(doc.cover_path)
-            if cp.exists():
+            cp = resolve_document_file_path(doc.cover_path)
+            if cp is not None:
                 cp.unlink()
     except Exception:
         pass

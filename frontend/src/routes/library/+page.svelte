@@ -132,6 +132,21 @@
 
   const BLOCKING_JOB_TYPES = new Set(['extract_text', 'ocr']);
 
+  function buildDocumentsUrl(folderId: string | null): string {
+    const baseUrl = `${apiUrl}/api/documents`;
+    if (!folderId || folderId === 'all') return baseUrl;
+    return `${baseUrl}?${new URLSearchParams({ folder_id: folderId }).toString()}`;
+  }
+
+  function normalizeDocumentEntries(items: any[] = []): DocWithJobs[] {
+    return items.map((item: any) => ({
+      document: item.document ?? item,
+      jobs: item.jobs ?? [],
+      highlight_count: item.highlight_count ?? 0,
+      note_count: item.note_count ?? 0,
+    }));
+  }
+
   async function loadDocuments(options: { silent?: boolean } = {}) {
     const { silent = false } = options;
     if (!silent) {
@@ -139,21 +154,12 @@
       error = null;
     }
     try {
-      let url = `${apiUrl}/api/documents`;
-      if (selectedFolderId && selectedFolderId !== 'all') {
-        url += `?folder_id=${selectedFolderId === 'uncategorized' ? 'null' : selectedFolderId}`;
-      }
-      const resp = await fetch(url);
+      const resp = await fetch(buildDocumentsUrl(selectedFolderId));
       if (!resp.ok) {
         throw new Error(`HTTP ${resp.status}`);
       }
       const payload = await resp.json();
-      documents = (payload.documents || []).map((item: any) => ({
-        document: item.document ?? item,
-        jobs: item.jobs ?? [],
-        highlight_count: item.highlight_count ?? 0,
-        note_count: item.note_count ?? 0,
-      }));
+      documents = normalizeDocumentEntries(payload.documents || []);
     } catch (e) {
       if (!silent) {
         error = e instanceof Error ? e.message : String(e);
@@ -395,17 +401,19 @@
     documents = documents.filter((d) => (d.document?.id ?? d.localId) !== id);
   }
 
+  async function requestDeleteDocument(id: string): Promise<void> {
+    const response = await fetch(`${apiUrl}/api/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const payload = response.ok ? await response.json() : null;
+    if (!response.ok || !payload?.deleted) throw new Error(`HTTP ${response.status}`);
+  }
+
   async function deleteDocument(entry: DocWithJobs) {
     const id = entry?.document?.id;
     if (!id) return;
-
-    const title = entry.document?.title || 'Untitled';
-    if (!confirmDelete(title)) return;
+    if (!confirmDelete(entry.document?.title || 'Untitled')) return;
 
     try {
-      const response = await fetch(`${apiUrl}/api/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      const payload = response.ok ? await response.json() : null;
-      if (!response.ok || !payload?.deleted) throw new Error(`HTTP ${response.status}`);
+      await requestDeleteDocument(id);
       removeDocumentFromList(id);
     } catch (e) {
       alert('Failed to delete document: ' + (e instanceof Error ? e.message : String(e)));

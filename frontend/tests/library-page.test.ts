@@ -81,19 +81,24 @@ describe('library page', () => {
 
   it('navigates highlight search results with an explicit highlight target', async () => {
     vi.useFakeTimers();
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ documents: [] }))
-      .mockResolvedValue(jsonResponse({
-        results: [{
-          id: 'highlight-1',
-          source_type: 'highlight',
-          document_id: 'doc-1',
-          document_title: 'Global Search Doc',
-          page_number: 2,
-          content: 'matching highlight',
-          highlight_id: null,
-        }],
-      }));
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/folders')) return Promise.resolve(jsonResponse({ folders: [] }));
+      if (url.includes('/api/search')) {
+        return Promise.resolve(jsonResponse({
+          results: [{
+            id: 'highlight-1',
+            source_type: 'highlight',
+            document_id: 'doc-1',
+            document_title: 'Global Search Doc',
+            page_number: 2,
+            content: 'matching highlight',
+            highlight_id: null,
+          }],
+        }));
+      }
+      return Promise.resolve(jsonResponse({ documents: [] }));
+    });
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -102,7 +107,7 @@ describe('library page', () => {
     });
 
     await advanceAndFlush(0);
-    await fireEvent.input(getByLabelText('Search notes and highlights'), { target: { value: 'matching' } });
+    await fireEvent.input(getByLabelText('Search notes, highlights, and documents'), { target: { value: 'matching' } });
     await advanceAndFlush(250);
     await fireEvent.click(getAllByRole('option')[0]);
 
@@ -111,19 +116,24 @@ describe('library page', () => {
 
   it('navigates note search results with a page target', async () => {
     vi.useFakeTimers();
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ documents: [] }))
-      .mockResolvedValue(jsonResponse({
-        results: [{
-          id: 'note-1',
-          source_type: 'note',
-          document_id: 'doc-2',
-          document_title: 'Global Search Doc 2',
-          page_number: 5,
-          content: 'matching note',
-          highlight_id: null,
-        }],
-      }));
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/folders')) return Promise.resolve(jsonResponse({ folders: [] }));
+      if (url.includes('/api/search')) {
+        return Promise.resolve(jsonResponse({
+          results: [{
+            id: 'note-1',
+            source_type: 'note',
+            document_id: 'doc-2',
+            document_title: 'Global Search Doc 2',
+            page_number: 5,
+            content: 'matching note',
+            highlight_id: null,
+          }],
+        }));
+      }
+      return Promise.resolve(jsonResponse({ documents: [] }));
+    });
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -132,7 +142,7 @@ describe('library page', () => {
     });
 
     await advanceAndFlush(0);
-    await fireEvent.input(getByLabelText('Search notes and highlights'), { target: { value: 'matching' } });
+    await fireEvent.input(getByLabelText('Search notes, highlights, and documents'), { target: { value: 'matching' } });
     await advanceAndFlush(250);
     await fireEvent.click(getAllByRole('option')[0]);
 
@@ -140,10 +150,11 @@ describe('library page', () => {
   });
 
   it('replaces the optimistic upload card with the server response', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ documents: [] }))
-      .mockResolvedValueOnce(
-        jsonResponse({
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/folders')) return Promise.resolve(jsonResponse({ folders: [] }));
+      if (init?.method === 'POST') {
+        return Promise.resolve(jsonResponse({
           created: true,
           document: {
             id: 'doc-1',
@@ -170,8 +181,10 @@ describe('library page', () => {
               },
             },
           ],
-        }),
-      );
+        }));
+      }
+      return Promise.resolve(jsonResponse({ documents: [] }));
+    });
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -184,7 +197,7 @@ describe('library page', () => {
     });
 
     await waitFor(() => {
-      expect(getByText('No documents yet - upload a PDF or EPUB to get started.')).toBeTruthy();
+      expect(getByText('No documents yet — upload a PDF or EPUB to get started.')).toBeTruthy();
     });
 
     const fileInput = container.querySelector('input[type="file"]');
@@ -245,74 +258,133 @@ describe('library page', () => {
     });
   });
 
+  it('shows the selected folder heading and clears back to all documents', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/folders')) {
+        return Promise.resolve(jsonResponse({ folders: [{ id: 'folder-1', name: 'Test Folder' }] }));
+      }
+      if (url.includes('folder_id=folder-1')) {
+        return Promise.resolve(jsonResponse({
+          documents: [
+            {
+              document: {
+                id: 'doc-folder',
+                title: 'Folder Doc',
+                authors: ['Ada'],
+                format: 'pdf',
+                created_at: '2024-01-01T10:00:00Z',
+                updated_at: '2024-01-01T10:00:00Z',
+                reading_progress: {},
+              },
+              jobs: [],
+            },
+          ],
+        }));
+      }
+      return Promise.resolve(jsonResponse({ documents: [] }));
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { getByRole, getByTitle } = render(LibraryPage, {
+      props: { data: { apiUrl: 'http://api.test' } },
+    });
+
+    await waitFor(() => expect(getByRole('button', { name: /Test Folder/ })).toBeTruthy());
+    await fireEvent.click(getByRole('button', { name: /Test Folder/ }));
+
+    await waitFor(() => {
+      expect(getByRole('heading', { level: 1, name: 'Test Folder' })).toBeTruthy();
+      expect(getByRole('heading', { level: 2, name: 'Folder Doc' })).toBeTruthy();
+    });
+
+    await fireEvent.click(getByTitle('Show all documents'));
+
+    await waitFor(() => {
+      expect(getByRole('heading', { level: 1, name: 'All documents' })).toBeTruthy();
+    });
+  });
+
+  it('closes the move-to-folder menu when clicking outside it', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/folders')) {
+        return Promise.resolve(jsonResponse({ folders: [{ id: 'folder-1', name: 'Test Folder' }] }));
+      }
+      return Promise.resolve(jsonResponse({
+        documents: [
+          {
+            document: {
+              id: 'doc-1',
+              title: 'Movable Doc',
+              authors: ['Ada'],
+              format: 'pdf',
+              created_at: '2024-01-01T10:00:00Z',
+              updated_at: '2024-01-01T10:00:00Z',
+              reading_progress: {},
+            },
+            jobs: [],
+          },
+        ],
+      }));
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { getByTitle, getByText, queryByText, getByRole } = render(LibraryPage, {
+      props: { data: { apiUrl: 'http://api.test' } },
+    });
+
+    await waitFor(() => expect(getByRole('heading', { level: 2, name: 'Movable Doc' })).toBeTruthy());
+    await fireEvent.click(getByTitle('Move to folder'));
+    expect(getByText('Move to')).toBeTruthy();
+
+    await fireEvent.click(getByRole('heading', { level: 1, name: 'All documents' }));
+
+    await waitFor(() => expect(queryByText('Move to')).toBeNull());
+  });
+
   it('polls for job updates until processing documents become ready', async () => {
     vi.useFakeTimers();
 
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          documents: [
+    let documentFetches = 0;
+    const documentPayload = (status: 'pending' | 'completed') => jsonResponse({
+      documents: [
+        {
+          document: {
+            id: 'doc-1',
+            title: 'Pollable Document',
+            authors: ['Ada Lovelace'],
+            format: 'pdf',
+            created_at: '2024-02-01T10:00:00Z',
+            updated_at: '2024-02-01T10:00:00Z',
+            reading_progress: {},
+          },
+          jobs: [
             {
-              document: {
-                id: 'doc-1',
+              id: 'job-1',
+              job_type: 'extract_text',
+              status,
+              payload: {
+                document_id: 'doc-1',
+                file_hash: 'abc123',
+                format: 'pdf',
                 title: 'Pollable Document',
                 authors: ['Ada Lovelace'],
-                format: 'pdf',
-                created_at: '2024-02-01T10:00:00Z',
-                updated_at: '2024-02-01T10:00:00Z',
-                reading_progress: {},
+                page_count: 10,
               },
-              jobs: [
-                {
-                  id: 'job-1',
-                  job_type: 'extract_text',
-                  status: 'pending',
-                  payload: {
-                    document_id: 'doc-1',
-                    file_hash: 'abc123',
-                    format: 'pdf',
-                    title: 'Pollable Document',
-                    authors: ['Ada Lovelace'],
-                    page_count: 10,
-                  },
-                },
-              ],
             },
           ],
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          documents: [
-            {
-              document: {
-                id: 'doc-1',
-                title: 'Pollable Document',
-                authors: ['Ada Lovelace'],
-                format: 'pdf',
-                created_at: '2024-02-01T10:00:00Z',
-                updated_at: '2024-02-01T10:00:00Z',
-                reading_progress: {},
-              },
-              jobs: [
-                {
-                  id: 'job-1',
-                  job_type: 'extract_text',
-                  status: 'completed',
-                  payload: {
-                    document_id: 'doc-1',
-                    file_hash: 'abc123',
-                    format: 'pdf',
-                    title: 'Pollable Document',
-                    authors: ['Ada Lovelace'],
-                    page_count: 10,
-                  },
-                },
-              ],
-            },
-          ],
-        }),
-      );
+        },
+      ],
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/folders')) return Promise.resolve(jsonResponse({ folders: [] }));
+      documentFetches += 1;
+      return Promise.resolve(documentPayload(documentFetches === 1 ? 'pending' : 'completed'));
+    });
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -332,6 +404,6 @@ describe('library page', () => {
 
     expect(getByText('Open to read')).toBeTruthy();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(documentFetches).toBe(2);
   });
 });
