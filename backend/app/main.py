@@ -116,6 +116,28 @@ def health() -> dict[str, object]:
     }
 
 
+def resolve_document_file_path(stored_file_path: str) -> Path | None:
+    # Try the stored path first (usually absolute inside the container), then
+    # fall back to resolving Docker-style /data/... paths under DATA_DIR for
+    # local dev setups where the backend runs outside Docker.
+    stored_path = Path(stored_file_path)
+    candidates = [stored_path]
+    if stored_path.is_absolute():
+        try:
+            candidates.append(DATA_DIR / stored_path.relative_to("/data"))
+        except ValueError:
+            relative = stored_path.relative_to(stored_path.anchor) if stored_path.anchor else stored_path
+            candidates.append(DATA_DIR / relative)
+    else:
+        candidates.append(DATA_DIR / stored_path)
+
+    for candidate in candidates:
+        logger.info("Checking file path candidate: %s (exists=%s)", candidate, candidate.is_file())
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 @app.get("/api/documents/{document_id}/file")
 def stream_document_file(
     document_id: UUID,
@@ -133,28 +155,7 @@ def stream_document_file(
             detail="Only PDF documents can be streamed from this endpoint.",
         )
 
-    # Try the stored path first (usually absolute inside the container),
-    # then fall back to resolving under DATA_DIR for local dev setups
-    # where the backend runs outside Docker.
-    stored_path = Path(document.file_path)
-    candidates = [stored_path]
-    if stored_path.is_absolute():
-        # e.g. /data/pdfs/abc.pdf inside Docker → ./data/pdfs/abc.pdf when
-        # running the backend directly on the host with DATA_DIR=./data.
-        try:
-            candidates.append(DATA_DIR / stored_path.relative_to("/data"))
-        except ValueError:
-            relative = stored_path.relative_to(stored_path.anchor) if stored_path.anchor else stored_path
-            candidates.append(DATA_DIR / relative)
-    else:
-        candidates.append(DATA_DIR / stored_path)
-
-    file_path: Path | None = None
-    for candidate in candidates:
-        logger.info("Checking file path candidate: %s (exists=%s)", candidate, candidate.is_file())
-        if candidate.is_file():
-            file_path = candidate
-            break
+    file_path = resolve_document_file_path(document.file_path)
 
     if file_path is None:
         logger.error(
@@ -162,7 +163,7 @@ def stream_document_file(
             document_id,
             document.file_path,
             DATA_DIR,
-            [str(c) for c in candidates],
+            [],
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -344,8 +345,8 @@ def create_highlight(
     except Exception:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="PDF extraction not available")
 
-    pdf_path = Path(document.file_path)
-    if not pdf_path.is_file():
+    pdf_path = resolve_document_file_path(document.file_path)
+    if pdf_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document file not found")
 
     try:

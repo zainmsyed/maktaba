@@ -191,7 +191,9 @@
   });
 
   onDestroy(() => {
-    window.removeEventListener('click', closeMoveMenuOnOutsideClick);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('click', closeMoveMenuOnOutsideClick);
+    }
     if (pollTimer !== null) {
       clearInterval(pollTimer);
       pollTimer = null;
@@ -504,6 +506,60 @@
 </svelte:head>
 
 <main class="library-page">
+  <header class="topbar">
+      <div class="topbar-left">
+        <span class="wordmark">maktaba</span>
+        <nav class="nav-links" aria-label="Primary">
+          <a class="nav-link active" href="/library">library</a>
+          <a class="nav-link" href="/library/demo" on:click|preventDefault={goToLastReading}>reading</a>
+        </nav>
+      </div>
+
+      <div class="search-wrap">
+        <div class="search-box" class:search-box--active={searchOpen || searchQuery.length > 0}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="Search notes, highlights, and documents…"
+            aria-label="Search notes, highlights, and documents"
+            bind:value={searchQuery}
+            on:input={debouncedSearch}
+            on:keydown={(e) => { if (e.key === 'Escape') clearSearch(); }}
+          />
+          {#if searchLoading}
+            <span class="search-spinner" aria-hidden="true">⟳</span>
+          {/if}
+        </div>
+        {#if searchOpen}
+          <div class="search-panel" role="listbox" aria-label="Search results">
+            {#if searchError}
+              <div class="search-error">{searchError}</div>
+            {:else if searchResults.length === 0}
+              <div class="search-empty">No results for "{searchQuery}"</div>
+            {:else}
+              {#each searchResults as result (result.id)}
+                <button
+                  type="button"
+                  class="search-result"
+                  role="option"
+                  aria-selected="false"
+                  on:click={() => handleResultClick(result)}
+                >
+                  <span class="search-result-type">{result.source_type}</span>
+                  <span class="search-result-title">{result.document_title ?? 'Untitled'}</span>
+                  {#if result.page_number}
+                    <span class="search-result-page">{result.page_number}</span>
+                  {/if}
+                  <p class="search-result-snippet">{result.content}</p>
+                </button>
+              {/each}
+            {/if}
+          </div>
+        {/if}
+      </div>
+    </header>
+
   <div class="library-shell">
     <aside class="folder-sidebar">
       <div class="folder-header">
@@ -572,61 +628,6 @@
         {/if}
       {/each}
     </aside>
-
-    <div class="library-main">
-      <header class="topbar">
-        <div class="topbar-left">
-          <span class="wordmark">maktaba</span>
-          <nav class="nav-links" aria-label="Primary">
-            <a class="nav-link active" href="/library">library</a>
-            <a class="nav-link" href="/library/demo" on:click|preventDefault={goToLastReading}>reading</a>
-          </nav>
-        </div>
-
-        <div class="search-wrap">
-          <div class="search-box" class:search-box--active={searchOpen || searchQuery.length > 0}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input
-              type="search"
-              class="search-input"
-              placeholder="Search notes, highlights, and documents…"
-              aria-label="Search notes, highlights, and documents"
-              bind:value={searchQuery}
-              on:input={debouncedSearch}
-              on:keydown={(e) => { if (e.key === 'Escape') clearSearch(); }}
-            />
-            {#if searchLoading}
-              <span class="search-spinner" aria-hidden="true">⟳</span>
-            {/if}
-          </div>
-          {#if searchOpen}
-            <div class="search-panel" role="listbox" aria-label="Search results">
-              {#if searchError}
-                <div class="search-error">{searchError}</div>
-              {:else if searchResults.length === 0}
-                <div class="search-empty">No results for "{searchQuery}"</div>
-              {:else}
-                {#each searchResults as result (result.id)}
-                  <button
-                    type="button"
-                    class="search-result"
-                    role="option"
-                    aria-selected="false"
-                    on:click={() => handleResultClick(result)}
-                  >
-                    <span class="search-result-type">{result.source_type}</span>
-                    <span class="search-result-title">{result.document_title ?? 'Untitled'}</span>
-                    {#if result.page_number}
-                      <span class="search-result-page">{result.page_number}</span>
-                    {/if}
-                    <p class="search-result-snippet">{result.content}</p>
-                  </button>
-                {/each}
-              {/if}
-            </div>
-          {/if}
-        </div>
-      </header>
 
       <section class="library-view">
         {#if selectedFolderId !== 'all'}
@@ -744,7 +745,6 @@
           </div>
         {/if}
       </section>
-    </div>
   </div>
 </main>
 
@@ -758,7 +758,7 @@
   }
 
   .library-shell {
-    min-height: 100vh;
+    min-height: calc(100vh - 64px);
     display: flex;
     flex-direction: row;
     background: transparent;
@@ -876,6 +876,7 @@
 
   .folder-create-input {
     flex: 1;
+    min-width: 0;
     border: 1px solid var(--rule);
     border-radius: 6px;
     background: var(--panel-bg-strong);
@@ -887,6 +888,7 @@
   }
 
   .folder-create-ok {
+    flex-shrink: 0;
     background: var(--accent);
     color: white;
     border: none;
@@ -898,13 +900,6 @@
   }
   .folder-create-ok:hover {
     opacity: 0.9;
-  }
-
-  .library-main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
   }
 
   .topbar {
@@ -1144,6 +1139,7 @@
 
   .library-view {
     flex: 1;
+    min-width: 0;
     padding: 22px clamp(18px, 3vw, 40px) 30px;
   }
 
@@ -1462,6 +1458,7 @@
     }
     .folder-sidebar {
       width: 100%;
+      min-height: auto;
       border-right: none;
       border-bottom: 1px solid var(--rule);
       flex-direction: row;
