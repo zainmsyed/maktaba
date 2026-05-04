@@ -19,7 +19,7 @@ interface LibraryEntry {
 
 export const load = async ({ fetch, params }) => {
   // client-facing API URL (used in links returned to the browser)
-  const clientApiUrl = (publicEnv.PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+  const clientApiUrl = (publicEnv.PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/$/, '');
   // server-side URL to use when fetching from inside the frontend container. Falls back to clientApiUrl.
   const serverApiUrl = (privateEnv.SERVER_API_URL || clientApiUrl).replace(/\/$/, '');
 

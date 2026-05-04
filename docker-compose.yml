@@ -74,7 +74,7 @@ services:
       target: runtime
     restart: unless-stopped
     environment:
-      PUBLIC_API_URL: "${PUBLIC_API_URL:-/api}"
+      PUBLIC_API_URL: "${PUBLIC_API_URL:-}"
       SERVER_API_URL: "${SERVER_API_URL:-http://backend:8000}"
       PORT: "3000"
       HOST: "0.0.0.0"
