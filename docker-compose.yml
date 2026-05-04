@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-maktaba}"
       POSTGRES_USER: "${POSTGRES_USER:-app}"
-      POSTGRES_PASSWORD: "${DB_PASSWORD:?set DB_PASSWORD in .env}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-maktaba-local-password}"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +23,7 @@ services:
       context: ./backend
     restart: "no"
     environment:
-      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:?set DB_PASSWORD in .env}@postgres/${POSTGRES_DB:-maktaba}"
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:-maktaba-local-password}@postgres/${POSTGRES_DB:-maktaba}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -34,13 +34,13 @@ services:
       context: ./backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:?set DB_PASSWORD in .env}@postgres/${POSTGRES_DB:-maktaba}"
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:-maktaba-local-password}@postgres/${POSTGRES_DB:-maktaba}"
       DATA_DIR: "${DATA_DIR:-/data}"
-      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-*}"
     volumes:
       - ./data:/data
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
       db-bootstrap:
         condition: service_completed_successfully
@@ -59,7 +59,7 @@ services:
       context: ./backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:?set DB_PASSWORD in .env}@postgres/${POSTGRES_DB:-maktaba}"
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-app}:${DB_PASSWORD:-maktaba-local-password}@postgres/${POSTGRES_DB:-maktaba}"
       DATA_DIR: "${DATA_DIR:-/data}"
     volumes:
       - ./data:/data
@@ -71,22 +71,29 @@ services:
   frontend:
     build:
       context: ./frontend
-      target: dev
+      target: runtime
     restart: unless-stopped
     environment:
-      PUBLIC_API_URL: "${PUBLIC_API_URL:-http://localhost:8000}"
+      PUBLIC_API_URL: "${PUBLIC_API_URL:-/api}"
       SERVER_API_URL: "${SERVER_API_URL:-http://backend:8000}"
       PORT: "3000"
       HOST: "0.0.0.0"
-      CHOKIDAR_USEPOLLING: "true"
-    volumes:
-      - ./frontend:/app:Z
-      - /app/node_modules
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     depends_on:
       backend:
         condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - ./Caddyfile.home:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - frontend
+      - backend
 
 volumes:
   pgdata: {}
