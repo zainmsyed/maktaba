@@ -154,20 +154,25 @@
           on:click={() => { onClose?.(); dispatch('close'); }}
           aria-label="Close note editor"
         >
-          ← back
+          ←
         </button>
 
-        <p class="paper-editor-label ne-label">Document note editor</p>
+        <div class="ne-title-wrap">
+          <p class="paper-editor-label ne-label">{highlight ? 'Highlight note' : 'Document note'}</p>
+          <p class="ne-subtitle">Autosaves as you type</p>
+        </div>
       </div>
 
-      <span class="paper-save-status ne-status ne-status--{status}" aria-live="polite">
+      <span class="paper-save-status ne-status ne-status--{status}" aria-live="polite" title={status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : status === 'error' ? 'Unable to save note' : 'Idle'}>
         {#if status === 'saving'}
-          <svg class="ne-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          <span>Saving…</span>
+          <span class="ne-status-dot ne-status-dot--saving" aria-hidden="true"></span>
+          <span class="sr-only">Saving…</span>
         {:else if status === 'saved'}
-          <span>Saved</span>
+          <span class="ne-status-dot ne-status-dot--saved" aria-hidden="true"></span>
+          <span class="sr-only">Saved</span>
         {:else if status === 'error'}
-          <span>Unable to save note</span>
+          <span class="ne-status-dot ne-status-dot--error" aria-hidden="true"></span>
+          <span class="sr-only">Unable to save note</span>
         {/if}
       </span>
     </div>
@@ -203,6 +208,13 @@
 <style>
   /* Minimal overrides - prefer the global paper theme classes */
   .ne-shell { padding: 0; }
+  .ne-shell--sidebar {
+    margin: 0 14px 12px;
+    padding: 12px;
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--paper-2) 78%, transparent);
+  }
   .ne-shell--popup {
     padding: 0;
     background: transparent !important;
@@ -219,24 +231,36 @@
   .ne-shell--popup .ne-quote { color: var(--ink-2); }
   .ne-shell--popup .ne-textarea::placeholder { color: var(--ink-3); }
 
-  .ne-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .ne-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .ne-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .ne-header-left { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
+  .ne-title-wrap { min-width: 0; }
+  .ne-label { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ne-subtitle { margin: 2px 0 0; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; color: var(--ink-3); }
 
-  /* Keep a small size for the back button so it doesn't dominate */
-  .ne-back-btn { padding: 4px 8px; font-size: 11px; }
+  /* Keep a small icon button so it doesn't dominate narrow sidebars */
+  .ne-back-btn { width: 30px; height: 30px; padding: 0; font-size: 14px; flex-shrink: 0; }
 
   .ne-spin { width: 12px; height: 12px; animation: ne-spin 0.8s linear infinite; }
   @keyframes ne-spin { to { transform: rotate(360deg); } }
 
   /* status dot */
-  .paper-save-status { font-size: 10px; min-width: 56px; display: inline-flex; align-items: center; justify-content: center; }
-  .ne-status-dot { display: inline-block; width: 12px; height: 12px; border-radius: 999px; }
-  .ne-status-dot--saving { background: linear-gradient(90deg,#f59e0b,#fb923c); animation: ne-pulse 1s ease-in-out infinite; }
-  .ne-status-dot--saved { background: #16a34a; }
+  .paper-save-status { font-size: 10px; min-width: 16px; display: inline-flex; align-items: center; justify-content: center; }
+  .ne-status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 999px; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent); }
+  .ne-status-dot--saving { color: #f59e0b; background: currentColor; animation: ne-pulse 1s ease-in-out infinite; }
+  .ne-status-dot--saved { color: #16a34a; background: currentColor; }
+  .ne-status-dot--error { color: #c44040; background: currentColor; }
   @keyframes ne-pulse { 0%{ transform: scale(1); opacity: 1 } 50%{ transform: scale(1.35); opacity: .65 } 100%{ transform: scale(1); opacity: 1 } }
 
   /* Ensure the paper-editor textarea uses the app's UI rhythm */
-  .paper-editor-textarea { font-family: var(--font-mono); font-size: 11.5px; }
+  .paper-editor-textarea { font-family: var(--font-mono); font-size: 12px; }
+  .ne-shell--sidebar .paper-editor-textarea {
+    min-height: 86px;
+    padding: 9px 10px;
+    border: 1px solid color-mix(in srgb, var(--rule) 75%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--panel-bg) 78%, transparent);
+    line-height: 1.55;
+  }
   .ne-shell--popup .paper-editor-textarea {
     font-family: var(--font-serif);
     font-size: 15px;
@@ -249,6 +273,7 @@
   }
   .paper-editor-quote { font-size: 11px; }
   .paper-save-status { font-size: 10px; }
+  .ne-hint { margin-top: 8px; color: var(--ink-3); }
 
 
 </style>

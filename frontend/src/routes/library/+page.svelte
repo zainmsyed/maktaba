@@ -630,17 +630,18 @@
     </aside>
 
       <section class="library-view">
-        {#if selectedFolderId !== 'all'}
-          <div class="folder-chip">
-            <span class="folder-chip-label">{folderNameById(selectedFolderId)}</span>
-            <button type="button" class="folder-chip-clear" on:click={() => selectFolder('all')}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-        {/if}
-
         <div class="library-toolbar">
-          <p class="library-summary">{sortedDocuments.length} documents</p>
+          <div class="library-heading">
+            <div class="library-heading-title-row">
+              <h1 class="library-heading-title">{folderNameById(selectedFolderId)}</h1>
+              {#if selectedFolderId !== 'all'}
+                <button type="button" class="library-heading-clear" title="Show all documents" aria-label="Show all documents" on:click={() => selectFolder('all')}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              {/if}
+            </div>
+            <p class="library-summary">{sortedDocuments.length} documents</p>
+          </div>
 
           <div class="library-header-actions">
             <label class="upload-btn paper-btn-accent">
@@ -1143,36 +1144,6 @@
     padding: 22px clamp(18px, 3vw, 40px) 30px;
   }
 
-  .folder-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    border-radius: 999px;
-    background: var(--paper-2);
-    border: 1px solid var(--rule);
-    margin-bottom: 12px;
-    font-family: var(--font-serif);
-    font-size: 13px;
-    color: var(--ink);
-  }
-
-  .folder-chip-clear {
-    background: transparent;
-    border: none;
-    color: var(--ink-3);
-    cursor: pointer;
-    padding: 2px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-  }
-  .folder-chip-clear:hover {
-    background: rgba(0,0,0,0.06);
-    color: var(--ink);
-  }
-
   .library-toolbar {
     display: flex;
     align-items: center;
@@ -1182,13 +1153,58 @@
     max-width: 1280px;
   }
 
+  .library-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .library-heading-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .library-heading-title {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .library-summary {
-    margin: 4px 0 0;
+    margin: 0;
     font-family: var(--font-serif);
     font-size: 13px;
     font-weight: 300;
     letter-spacing: 0.08em;
     color: var(--ink-3);
+  }
+
+  .library-heading-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    flex-shrink: 0;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink-3);
+    cursor: pointer;
+  }
+  .library-heading-clear:hover {
+    background: var(--paper-2);
+    color: var(--ink);
   }
 
   .library-state {

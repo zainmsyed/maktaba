@@ -217,6 +217,7 @@
   let highlightSidebarGroups: HighlightGroup[] = [];
   let filteredHighlightSidebarGroups: HighlightGroup[] = [];
   let filteredDocumentNotes: BackendNote[] = [];
+  let visibleDocumentNotes: BackendNote[] = [];
   let sidebarMode: SidebarMode = 'annotations';
   let sidebarSearchQuery = '';
   let activeNoteTarget: NoteEditorTarget | null = null;
@@ -286,6 +287,7 @@
   $: highlightSidebarGroups = (notes.length, groupHighlightsForSidebar(highlights));
   $: filteredHighlightSidebarGroups = filterHighlightGroups(highlightSidebarGroups, sidebarSearchQuery);
   $: filteredDocumentNotes = filterDocumentNotesForSidebar(noteSidebarGroups.documentNotes, sidebarSearchQuery);
+  $: visibleDocumentNotes = filteredDocumentNotes.filter((note) => note.id !== activeNoteRecord?.id);
 
   function clampZoom(value: number) {
     return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
@@ -2334,6 +2336,9 @@
     }
 
     .paper-document-note-card {
+      margin: 0 14px 8px;
+      border: 1px solid var(--rule);
+      border-radius: 10px;
       background: color-mix(in srgb, var(--paper-2) 72%, transparent);
     }
 
@@ -2683,10 +2688,10 @@
               {/each}
             {/each}
           {/if}
-        {:else if filteredDocumentNotes.length === 0}
-          <p class="paper-sidebar-empty">{normalizeSidebarSearch(sidebarSearchQuery) ? 'No document notes match your search.' : 'No document notes yet.'}</p>
+        {:else if visibleDocumentNotes.length === 0}
+          <p class="paper-sidebar-empty">{normalizeSidebarSearch(sidebarSearchQuery) ? 'No document notes match your search.' : (activeNoteTarget?.kind === 'document' ? 'No other document notes.' : 'No document notes yet.')}</p>
         {:else}
-          {#each filteredDocumentNotes as note (note.id)}
+          {#each visibleDocumentNotes as note (note.id)}
             <div class="paper-note-item paper-document-note-card">
               <div class="paper-note-loc"><span class="paper-note-label">standalone</span></div>
               <div class="paper-note-body-row">
